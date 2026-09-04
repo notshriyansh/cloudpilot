@@ -1,15 +1,16 @@
 {
-  "name": "@cloudpilot/cloudflare-provider",
+  "name": "@cloudpilot/inventory",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "exports": {
-    ".": "./src/index.ts"
-  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@cloudpilot/cloudflare-provider": "workspace:*",
+    "@cloudpilot/domain": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.5.2",
