@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DesiredState, ObservedState, ResourceState } from "../src/index";
+import { findResource, resourceIdKey } from "../src/state";
 
 describe("CloudPilot state model", () => {
   it("represents a resource state", () => {
@@ -62,5 +63,37 @@ describe("CloudPilot state model", () => {
     };
 
     expect(desired.resources).toHaveLength(1);
+  });
+
+  it("creates a stable resource identity key", () => {
+    expect(
+      resourceIdKey({
+        type: "zone",
+        id: "zone-123",
+      }),
+    ).toBe("zone:zone-123");
+  });
+
+  it("finds a resource by identity", () => {
+    const state: ObservedState = {
+      resources: [
+        {
+          resource: {
+            type: "zone",
+            id: "zone-123",
+          },
+          attributes: {
+            name: "example.com",
+          },
+        },
+      ],
+    };
+
+    expect(
+      findResource(state, {
+        type: "zone",
+        id: "zone-123",
+      }),
+    ).toEqual(state.resources[0]);
   });
 });

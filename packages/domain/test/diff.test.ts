@@ -1,0 +1,214 @@
+import { describe, expect, it } from "vitest";
+
+import { diffStates } from "../src";
+import type { DesiredState, ObservedState } from "../src";
+
+describe("diffStates", () => {
+  it("returns no changes when desired and observed state match", () => {
+    const desired: DesiredState = {
+      resources: [
+        {
+          resource: {
+            type: "zone",
+            id: "zone-1",
+          },
+          attributes: {
+            name: "example.com",
+            status: "active",
+          },
+        },
+      ],
+    };
+
+    const observed: ObservedState = {
+      resources: [
+        {
+          resource: {
+            type: "zone",
+            id: "zone-1",
+          },
+          attributes: {
+            name: "example.com",
+            status: "active",
+          },
+        },
+      ],
+    };
+
+    expect(diffStates(desired, observed)).toEqual({
+      changes: [],
+    });
+  });
+
+  it("detects resources that need to be created", () => {
+    const desired: DesiredState = {
+      resources: [
+        {
+          resource: {
+            type: "zone",
+            id: "zone-1",
+          },
+          attributes: {
+            name: "example.com",
+            status: "active",
+          },
+        },
+      ],
+    };
+
+    const observed: ObservedState = {
+      resources: [],
+    };
+
+    expect(diffStates(desired, observed)).toEqual({
+      changes: [
+        {
+          type: "create",
+          resource: desired.resources[0],
+        },
+      ],
+    });
+  });
+
+  it("detects resources that need to be updated", () => {
+    const desired: DesiredState = {
+      resources: [
+        {
+          resource: {
+            type: "zone",
+            id: "zone-1",
+          },
+          attributes: {
+            name: "example.com",
+            status: "active",
+          },
+        },
+      ],
+    };
+
+    const observed: ObservedState = {
+      resources: [
+        {
+          resource: {
+            type: "zone",
+            id: "zone-1",
+          },
+          attributes: {
+            name: "example.com",
+            status: "pending",
+          },
+        },
+      ],
+    };
+
+    expect(diffStates(desired, observed)).toEqual({
+      changes: [
+        {
+          type: "update",
+          desired: desired.resources[0],
+          observed: observed.resources[0],
+        },
+      ],
+    });
+  });
+
+  it("detects resources that should be deleted", () => {
+    const desired: DesiredState = {
+      resources: [],
+    };
+
+    const observed: ObservedState = {
+      resources: [
+        {
+          resource: {
+            type: "zone",
+            id: "zone-1",
+          },
+          attributes: {
+            name: "example.com",
+            status: "active",
+          },
+        },
+      ],
+    };
+
+    expect(diffStates(desired, observed)).toEqual({
+      changes: [
+        {
+          type: "delete",
+          resource: observed.resources[0],
+        },
+      ],
+    });
+  });
+
+  it("handles creates, updates, and deletes together", () => {
+    const desired: DesiredState = {
+      resources: [
+        {
+          resource: {
+            type: "zone",
+            id: "zone-1",
+          },
+          attributes: {
+            name: "updated.example.com",
+            status: "active",
+          },
+        },
+        {
+          resource: {
+            type: "zone",
+            id: "zone-2",
+          },
+          attributes: {
+            name: "new.example.com",
+            status: "active",
+          },
+        },
+      ],
+    };
+
+    const observed: ObservedState = {
+      resources: [
+        {
+          resource: {
+            type: "zone",
+            id: "zone-1",
+          },
+          attributes: {
+            name: "old.example.com",
+            status: "active",
+          },
+        },
+        {
+          resource: {
+            type: "zone",
+            id: "zone-3",
+          },
+          attributes: {
+            name: "removed.example.com",
+            status: "active",
+          },
+        },
+      ],
+    };
+
+    expect(diffStates(desired, observed)).toEqual({
+      changes: [
+        {
+          type: "update",
+          desired: desired.resources[0],
+          observed: observed.resources[0],
+        },
+        {
+          type: "create",
+          resource: desired.resources[1],
+        },
+        {
+          type: "delete",
+          resource: observed.resources[1],
+        },
+      ],
+    });
+  });
+});
