@@ -7,11 +7,12 @@ function createMockProvider(): CloudflareProvider {
   return {
     getAccount: vi.fn(),
     listZones: vi.fn(),
+    listDnsRecords: vi.fn(),
   };
 }
 
 describe("inventory", () => {
-  it("maps Cloudflare zones into observed state", async () => {
+  it("maps Cloudflare zones and DNS records into observed state", async () => {
     const provider = createMockProvider();
 
     vi.mocked(provider.listZones).mockResolvedValue([
@@ -29,6 +30,30 @@ describe("inventory", () => {
       },
     ]);
 
+    vi.mocked(provider.listDnsRecords)
+      .mockResolvedValueOnce([
+        {
+          id: "record-1",
+          zoneId: "zone-1",
+          name: "api.example.com",
+          type: "A",
+          content: "203.0.113.10",
+          ttl: 300,
+          proxied: true,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: "record-2",
+          zoneId: "zone-2",
+          name: "api.example.org",
+          type: "A",
+          content: "203.0.113.20",
+          ttl: 300,
+          proxied: false,
+        },
+      ]);
+
     const inventory = createInventory(provider);
 
     await expect(inventory.inspect()).resolves.toEqual({
@@ -45,6 +70,28 @@ describe("inventory", () => {
         },
         {
           resource: {
+            type: "dns_record",
+            id: "record-1",
+          },
+          attributes: {
+            name: "api.example.com",
+            type: "A",
+            content: "203.0.113.10",
+            ttl: 300,
+            proxied: true,
+          },
+          relationships: [
+            {
+              type: "belongs_to",
+              resource: {
+                type: "zone",
+                id: "zone-1",
+              },
+            },
+          ],
+        },
+        {
+          resource: {
             type: "zone",
             id: "zone-2",
           },
@@ -53,10 +100,34 @@ describe("inventory", () => {
             status: "pending",
           },
         },
+        {
+          resource: {
+            type: "dns_record",
+            id: "record-2",
+          },
+          attributes: {
+            name: "api.example.org",
+            type: "A",
+            content: "203.0.113.20",
+            ttl: 300,
+            proxied: false,
+          },
+          relationships: [
+            {
+              type: "belongs_to",
+              resource: {
+                type: "zone",
+                id: "zone-2",
+              },
+            },
+          ],
+        },
       ],
     });
 
     expect(provider.listZones).toHaveBeenCalledTimes(1);
+    expect(provider.listDnsRecords).toHaveBeenNthCalledWith(1, "zone-1");
+    expect(provider.listDnsRecords).toHaveBeenNthCalledWith(2, "zone-2");
   });
 
   it("returns an empty observed state when no zones exist", async () => {
@@ -69,6 +140,93 @@ describe("inventory", () => {
     await expect(inventory.inspect()).resolves.toEqual({
       resources: [],
     });
+
+    expect(provider.listDnsRecords).not.toHaveBeenCalled();
+  });
+
+  it("lists DNS records for each zone and preserves their relationships", async () => {
+    const provider = createMockProvider();
+
+    vi.mocked(provider.listZones).mockResolvedValue([
+      {
+        id: "zone-1",
+        name: "example.com",
+        status: "active",
+        accountId: "account-1",
+      },
+      {
+        id: "zone-2",
+        name: "example.org",
+        status: "active",
+        accountId: "account-1",
+      },
+    ]);
+
+    vi.mocked(provider.listDnsRecords)
+      .mockResolvedValueOnce([
+        {
+          id: "record-1",
+          zoneId: "zone-1",
+          name: "api.example.com",
+          type: "A",
+          content: "203.0.113.10",
+          ttl: 300,
+          proxied: true,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: "record-2",
+          zoneId: "zone-2",
+          name: "api.example.org",
+          type: "A",
+          content: "203.0.113.20",
+          ttl: 300,
+          proxied: false,
+        },
+      ]);
+
+    const inventory = createInventory(provider);
+
+    const observed = await inventory.inspect();
+
+    expect(provider.listDnsRecords).toHaveBeenNthCalledWith(1, "zone-1");
+    expect(provider.listDnsRecords).toHaveBeenNthCalledWith(2, "zone-2");
+
+    expect(observed.resources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          resource: {
+            type: "dns_record",
+            id: "record-1",
+          },
+          relationships: [
+            {
+              type: "belongs_to",
+              resource: {
+                type: "zone",
+                id: "zone-1",
+              },
+            },
+          ],
+        }),
+        expect.objectContaining({
+          resource: {
+            type: "dns_record",
+            id: "record-2",
+          },
+          relationships: [
+            {
+              type: "belongs_to",
+              resource: {
+                type: "zone",
+                id: "zone-2",
+              },
+            },
+          ],
+        }),
+      ]),
+    );
   });
 
   it("propagates provider errors", async () => {
@@ -76,6 +234,26 @@ describe("inventory", () => {
     const error = new Error("Cloudflare API unavailable");
 
     vi.mocked(provider.listZones).mockRejectedValue(error);
+
+    const inventory = createInventory(provider);
+
+    await expect(inventory.inspect()).rejects.toBe(error);
+  });
+
+  it("propagates DNS provider errors", async () => {
+    const provider = createMockProvider();
+    const error = new Error("DNS API unavailable");
+
+    vi.mocked(provider.listZones).mockResolvedValue([
+      {
+        id: "zone-1",
+        name: "example.com",
+        status: "active",
+        accountId: "account-1",
+      },
+    ]);
+
+    vi.mocked(provider.listDnsRecords).mockRejectedValue(error);
 
     const inventory = createInventory(provider);
 

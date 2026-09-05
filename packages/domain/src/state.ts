@@ -1,8 +1,10 @@
 import type { ResourceId } from "./resource";
+import type { ResourceRelationship } from "./relationship";
 
 export interface ResourceState {
   resource: ResourceId;
   attributes: Record<string, unknown>;
+  relationships?: ResourceRelationship[];
 }
 
 export interface ObservedState {

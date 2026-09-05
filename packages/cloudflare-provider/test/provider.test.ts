@@ -201,6 +201,248 @@ describe("CloudflareProvider", () => {
     });
   });
 
+  it("lists DNS records for a zone", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          result: [
+            {
+              id: "record-1",
+              name: "api.example.com",
+              type: "A",
+              content: "203.0.113.10",
+              ttl: 300,
+              proxied: true,
+            },
+            {
+              id: "record-2",
+              name: "www.example.com",
+              type: "CNAME",
+              content: "example.com",
+              ttl: 1,
+              proxied: false,
+            },
+          ],
+          result_info: {
+            page: 1,
+            per_page: 100,
+            total_pages: 1,
+            total: 2,
+          },
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    );
+
+    const provider = createCloudflareProvider(
+      {
+        accountId: "account-123",
+        apiToken: "test-token",
+      },
+      fetchImpl,
+    );
+
+    await expect(provider.listDnsRecords("zone-123")).resolves.toEqual([
+      {
+        id: "record-1",
+        zoneId: "zone-123",
+        name: "api.example.com",
+        type: "A",
+        content: "203.0.113.10",
+        ttl: 300,
+        proxied: true,
+      },
+      {
+        id: "record-2",
+        zoneId: "zone-123",
+        name: "www.example.com",
+        type: "CNAME",
+        content: "example.com",
+        ttl: 1,
+        proxied: false,
+      },
+    ]);
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "https://api.cloudflare.com/client/v4/zones/zone-123/dns_records?page=1",
+      {
+        method: "GET",
+        headers: {
+          Authorization: "Bearer test-token",
+          Accept: "application/json",
+        },
+      },
+    );
+  });
+
+  it("lists DNS records across multiple pages", async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: true,
+            result: [
+              {
+                id: "record-1",
+                name: "api.example.com",
+                type: "A",
+                content: "203.0.113.10",
+                ttl: 300,
+                proxied: true,
+              },
+            ],
+            result_info: {
+              page: 1,
+              per_page: 1,
+              total_pages: 2,
+              total: 2,
+            },
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: true,
+            result: [
+              {
+                id: "record-2",
+                name: "www.example.com",
+                type: "CNAME",
+                content: "example.com",
+                ttl: 1,
+                proxied: false,
+              },
+            ],
+            result_info: {
+              page: 2,
+              per_page: 1,
+              total_pages: 2,
+              total: 2,
+            },
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+        ),
+      );
+
+    const provider = createCloudflareProvider(
+      {
+        accountId: "account-123",
+        apiToken: "test-token",
+      },
+      fetchImpl,
+    );
+
+    await expect(provider.listDnsRecords("zone-123")).resolves.toEqual([
+      {
+        id: "record-1",
+        zoneId: "zone-123",
+        name: "api.example.com",
+        type: "A",
+        content: "203.0.113.10",
+        ttl: 300,
+        proxied: true,
+      },
+      {
+        id: "record-2",
+        zoneId: "zone-123",
+        name: "www.example.com",
+        type: "CNAME",
+        content: "example.com",
+        ttl: 1,
+        proxied: false,
+      },
+    ]);
+
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      1,
+      "https://api.cloudflare.com/client/v4/zones/zone-123/dns_records?page=1",
+      {
+        method: "GET",
+        headers: {
+          Authorization: "Bearer test-token",
+          Accept: "application/json",
+        },
+      },
+    );
+
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      2,
+      "https://api.cloudflare.com/client/v4/zones/zone-123/dns_records?page=2",
+      {
+        method: "GET",
+        headers: {
+          Authorization: "Bearer test-token",
+          Accept: "application/json",
+        },
+      },
+    );
+  });
+
+  it("rejects malformed DNS records", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          result: [
+            {
+              id: "record-1",
+              name: "api.example.com",
+              type: "A",
+              content: "203.0.113.10",
+              ttl: "300",
+              proxied: true,
+            },
+          ],
+          result_info: {
+            page: 1,
+            per_page: 100,
+            total_pages: 1,
+            total: 1,
+          },
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    );
+
+    const provider = createCloudflareProvider(
+      {
+        accountId: "account-123",
+        apiToken: "test-token",
+      },
+      fetchImpl,
+    );
+
+    await expect(provider.listDnsRecords("zone-123")).rejects.toThrow(
+      "Cloudflare API returned an invalid DNS record result",
+    );
+  });
+
   it("lists zones across multiple pages", async () => {
     const fetchMock = vi
       .fn<typeof fetch>()

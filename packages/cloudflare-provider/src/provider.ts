@@ -1,12 +1,14 @@
 import type { CloudflareAccount } from "./account";
 import type { CloudflareProviderConfig } from "./config";
 import { createCloudflareApiClient } from "./api";
+import type { CloudflareDnsRecord } from "./dns-record";
 import { CloudflareProviderError } from "./errors";
 import type { CloudflareZone } from "./zone";
 
 export interface CloudflareProvider {
   getAccount(): Promise<CloudflareAccount>;
   listZones(): Promise<CloudflareZone[]>;
+  listDnsRecords(zoneId: string): Promise<CloudflareDnsRecord[]>;
 }
 
 export function createCloudflareProvider(
@@ -89,6 +91,61 @@ export function createCloudflareProvider(
       }
 
       return zones;
+    },
+
+    async listDnsRecords(zoneId: string): Promise<CloudflareDnsRecord[]> {
+      const records: CloudflareDnsRecord[] = [];
+      let page = 1;
+
+      while (true) {
+        const response = await api.request<unknown[]>(
+          `/zones/${encodeURIComponent(zoneId)}/dns_records?page=${page}`,
+        );
+
+        for (const record of response.result) {
+          if (
+            typeof record !== "object" ||
+            record === null ||
+            !("id" in record) ||
+            typeof record.id !== "string" ||
+            !("name" in record) ||
+            typeof record.name !== "string" ||
+            !("type" in record) ||
+            typeof record.type !== "string" ||
+            !("content" in record) ||
+            typeof record.content !== "string" ||
+            !("ttl" in record) ||
+            typeof record.ttl !== "number" ||
+            !("proxied" in record) ||
+            typeof record.proxied !== "boolean"
+          ) {
+            throw new CloudflareProviderError(
+              "Cloudflare API returned an invalid DNS record result",
+            );
+          }
+
+          records.push({
+            id: record.id,
+            zoneId,
+            name: record.name,
+            type: record.type,
+            content: record.content,
+            ttl: record.ttl,
+            proxied: record.proxied,
+          });
+        }
+
+        if (
+          response.resultInfo === undefined ||
+          page >= response.resultInfo.totalPages
+        ) {
+          break;
+        }
+
+        page += 1;
+      }
+
+      return records;
     },
   };
 }
