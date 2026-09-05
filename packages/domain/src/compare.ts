@@ -1,3 +1,5 @@
+import type { ResourceRelationship } from "./relationship";
+
 export function areValuesEqual(left: unknown, right: unknown): boolean {
   if (Object.is(left, right)) {
     return true;
@@ -39,4 +41,37 @@ export function areValuesEqual(left: unknown, right: unknown): boolean {
       key === rightKeys[index] &&
       areValuesEqual(leftRecord[key], rightRecord[key]),
   );
+}
+
+export function areRelationshipsEqual(
+  left: ResourceRelationship[] | undefined,
+  right: ResourceRelationship[] | undefined,
+): boolean {
+  if (left === right) {
+    return true;
+  }
+
+  if (left === undefined || right === undefined) {
+    return false;
+  }
+
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  const leftKeys = left
+    .map(
+      (relationship) =>
+        `${relationship.type}:${relationship.resource.type}:${relationship.resource.id}`,
+    )
+    .sort();
+
+  const rightKeys = right
+    .map(
+      (relationship) =>
+        `${relationship.type}:${relationship.resource.type}:${relationship.resource.id}`,
+    )
+    .sort();
+
+  return leftKeys.every((key, index) => key === rightKeys[index]);
 }

@@ -112,6 +112,138 @@ describe("diffStates", () => {
     });
   });
 
+  it("detects relationship changes as updates", () => {
+    const desired: DesiredState = {
+      resources: [
+        {
+          resource: {
+            type: "dns_record",
+            id: "record-1",
+          },
+          attributes: {
+            name: "api.example.com",
+            type: "A",
+            content: "203.0.113.10",
+            ttl: 300,
+            proxied: true,
+          },
+          relationships: [
+            {
+              type: "belongs_to",
+              resource: {
+                type: "zone",
+                id: "zone-2",
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const observed: ObservedState = {
+      resources: [
+        {
+          resource: {
+            type: "dns_record",
+            id: "record-1",
+          },
+          attributes: {
+            name: "api.example.com",
+            type: "A",
+            content: "203.0.113.10",
+            ttl: 300,
+            proxied: true,
+          },
+          relationships: [
+            {
+              type: "belongs_to",
+              resource: {
+                type: "zone",
+                id: "zone-1",
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(diffStates(desired, observed)).toEqual({
+      changes: [
+        {
+          type: "update",
+          desired: desired.resources[0],
+          observed: observed.resources[0],
+        },
+      ],
+    });
+  });
+
+  it("ignores relationship ordering", () => {
+    const desired: DesiredState = {
+      resources: [
+        {
+          resource: {
+            type: "dns_record",
+            id: "record-1",
+          },
+          attributes: {
+            name: "api.example.com",
+          },
+          relationships: [
+            {
+              type: "belongs_to",
+              resource: {
+                type: "zone",
+                id: "zone-1",
+              },
+            },
+            {
+              type: "belongs_to",
+              resource: {
+                type: "zone",
+                id: "zone-2",
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const observed: ObservedState = {
+      resources: [
+        {
+          resource: {
+            type: "dns_record",
+            id: "record-1",
+          },
+          attributes: {
+            name: "api.example.com",
+          },
+          relationships: [
+            {
+              type: "belongs_to",
+              resource: {
+                type: "zone",
+                id: "zone-2",
+              },
+            },
+            {
+              type: "belongs_to",
+              resource: {
+                type: "zone",
+                id: "zone-1",
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(diffStates(desired, observed)).toEqual({
+      changes: [],
+    });
+  });
+
   it("detects resources that need to be updated", () => {
     const desired: DesiredState = {
       resources: [

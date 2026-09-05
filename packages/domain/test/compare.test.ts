@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-
-import { areValuesEqual } from "../src";
+import { areRelationshipsEqual, areValuesEqual } from "../src";
 
 describe("areValuesEqual", () => {
   it("treats primitive values correctly", () => {
@@ -16,6 +15,103 @@ describe("areValuesEqual", () => {
     expect(areValuesEqual(["a", "b", "c"], ["a", "b", "c"])).toBe(true);
 
     expect(areValuesEqual(["a", "b", "c"], ["c", "b", "a"])).toBe(false);
+  });
+
+  it("treats identical relationships as equal", () => {
+    expect(
+      areRelationshipsEqual(
+        [
+          {
+            type: "belongs_to",
+            resource: {
+              type: "zone",
+              id: "zone-1",
+            },
+          },
+        ],
+        [
+          {
+            type: "belongs_to",
+            resource: {
+              type: "zone",
+              id: "zone-1",
+            },
+          },
+        ],
+      ),
+    ).toBe(true);
+  });
+
+  it("treats relationship order as irrelevant", () => {
+    expect(
+      areRelationshipsEqual(
+        [
+          {
+            type: "belongs_to",
+            resource: {
+              type: "zone",
+              id: "zone-1",
+            },
+          },
+          {
+            type: "belongs_to",
+            resource: {
+              type: "zone",
+              id: "zone-2",
+            },
+          },
+        ],
+        [
+          {
+            type: "belongs_to",
+            resource: {
+              type: "zone",
+              id: "zone-2",
+            },
+          },
+          {
+            type: "belongs_to",
+            resource: {
+              type: "zone",
+              id: "zone-1",
+            },
+          },
+        ],
+      ),
+    ).toBe(true);
+  });
+
+  it("detects a different relationship target", () => {
+    expect(
+      areRelationshipsEqual(
+        [
+          {
+            type: "belongs_to",
+            resource: {
+              type: "zone",
+              id: "zone-1",
+            },
+          },
+        ],
+        [
+          {
+            type: "belongs_to",
+            resource: {
+              type: "zone",
+              id: "zone-2",
+            },
+          },
+        ],
+      ),
+    ).toBe(false);
+  });
+
+  it("treats missing and empty relationships as different", () => {
+    expect(areRelationshipsEqual(undefined, [])).toBe(false);
+  });
+
+  it("treats two missing relationship sets as equal", () => {
+    expect(areRelationshipsEqual(undefined, undefined)).toBe(true);
   });
 
   it("compares nested objects independent of key order", () => {

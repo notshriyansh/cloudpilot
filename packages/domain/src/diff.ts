@@ -1,6 +1,6 @@
 import type { DesiredState, ObservedState, ResourceState } from "./state";
 import { resourceIdKey } from "./state";
-import { areValuesEqual } from "./compare";
+import { areRelationshipsEqual, areValuesEqual } from "./compare";
 
 export type ResourceChange =
   | {
@@ -21,11 +21,14 @@ export interface StateDiff {
   changes: ResourceChange[];
 }
 
-function attributesEqual(
+function resourceStateEqual(
   desired: ResourceState,
   observed: ResourceState,
 ): boolean {
-  return areValuesEqual(desired.attributes, observed.attributes);
+  return (
+    areValuesEqual(desired.attributes, observed.attributes) &&
+    areRelationshipsEqual(desired.relationships, observed.relationships)
+  );
 }
 
 export function diffStates(
@@ -60,7 +63,7 @@ export function diffStates(
       continue;
     }
 
-    if (!attributesEqual(desiredResource, observedResource)) {
+    if (!resourceStateEqual(desiredResource, observedResource)) {
       changes.push({
         type: "update",
         desired: desiredResource,
