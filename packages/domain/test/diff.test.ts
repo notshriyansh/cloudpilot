@@ -40,6 +40,48 @@ describe("diffStates", () => {
     });
   });
 
+  it("ignores object key ordering when comparing attributes", () => {
+    const desired: DesiredState = {
+      resources: [
+        {
+          resource: {
+            type: "zone",
+            id: "zone-1",
+          },
+          attributes: {
+            name: "example.com",
+            settings: {
+              enabled: true,
+              retries: 3,
+            },
+          },
+        },
+      ],
+    };
+
+    const observed: ObservedState = {
+      resources: [
+        {
+          resource: {
+            type: "zone",
+            id: "zone-1",
+          },
+          attributes: {
+            settings: {
+              retries: 3,
+              enabled: true,
+            },
+            name: "example.com",
+          },
+        },
+      ],
+    };
+
+    expect(diffStates(desired, observed)).toEqual({
+      changes: [],
+    });
+  });
+
   it("detects resources that need to be created", () => {
     const desired: DesiredState = {
       resources: [

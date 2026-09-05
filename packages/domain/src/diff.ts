@@ -1,5 +1,6 @@
 import type { DesiredState, ObservedState, ResourceState } from "./state";
 import { resourceIdKey } from "./state";
+import { areValuesEqual } from "./compare";
 
 export type ResourceChange =
   | {
@@ -24,9 +25,7 @@ function attributesEqual(
   desired: ResourceState,
   observed: ResourceState,
 ): boolean {
-  return (
-    JSON.stringify(desired.attributes) === JSON.stringify(observed.attributes)
-  );
+  return areValuesEqual(desired.attributes, observed.attributes);
 }
 
 export function diffStates(
