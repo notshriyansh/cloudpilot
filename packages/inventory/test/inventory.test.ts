@@ -66,6 +66,7 @@ describe("inventory", () => {
           attributes: {
             name: "example.com",
             status: "active",
+            accountId: "account-1",
           },
         },
         {
@@ -98,6 +99,7 @@ describe("inventory", () => {
           attributes: {
             name: "example.org",
             status: "pending",
+            accountId: "account-1",
           },
         },
         {
