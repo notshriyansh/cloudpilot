@@ -7,3 +7,9 @@ export type {
   ResourceRelationship,
   ResourceRelationshipType,
 } from "./relationship";
+export {
+  buildResourceGraph,
+  ResourceGraphCycleError,
+  topologicalOrder,
+} from "./graph";
+export type { ResourceGraph } from "./graph";
