@@ -19,3 +19,18 @@ export {
 } from "./graph";
 export type { Plan, PlanAction, PlanOperation } from "./plan";
 export { createPlan } from "./planner";
+export type { RiskAssessment, RiskEvaluator, RiskLevel } from "./risk";
+export { createDefaultRiskEvaluator } from "./risk";
+export type {
+  ApprovalDecision,
+  ApprovalEvaluator,
+  ApprovalRequirement,
+} from "./approval";
+export { createDefaultApprovalEvaluator } from "./approval";
+export type {
+  EvaluatedOperation,
+  EvaluatedPlan,
+  PlanEvaluator,
+} from "./evaluation";
+export { createPlanEvaluator } from "./evaluation";
+export type { ExecutionReadiness } from "./evaluation";
