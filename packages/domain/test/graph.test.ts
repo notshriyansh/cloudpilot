@@ -4,8 +4,10 @@ import {
   buildResourceGraph,
   ResourceGraphCycleError,
   topologicalOrder,
+  buildOperationGraph,
+  topologicalOrderOperations,
 } from "../src";
-import type { ResourceState } from "../src";
+import type { ResourceState, PlanOperation } from "../src";
 
 describe("buildResourceGraph", () => {
   it("builds resources and belongs_to dependencies", () => {
@@ -322,5 +324,125 @@ describe("buildResourceGraph", () => {
     const reversedGraph = buildResourceGraph(reversedResources);
 
     expect(topologicalOrder(graph)).toEqual(topologicalOrder(reversedGraph));
+  });
+
+  it("orders create operations after their dependencies", () => {
+    const operations: PlanOperation[] = [
+      {
+        action: "create",
+        resource: {
+          type: "dns_record",
+          id: "record-1",
+        },
+        dependencies: [
+          {
+            type: "zone",
+            id: "zone-1",
+          },
+        ],
+      },
+      {
+        action: "create",
+        resource: {
+          type: "zone",
+          id: "zone-1",
+        },
+        dependencies: [],
+      },
+    ];
+
+    const graph = buildOperationGraph(operations);
+    const ordered = topologicalOrderOperations(graph);
+
+    expect(ordered).toEqual([
+      {
+        type: "zone",
+        id: "zone-1",
+      },
+      {
+        type: "dns_record",
+        id: "record-1",
+      },
+    ]);
+  });
+
+  it("orders delete operations before their dependencies", () => {
+    const operations: PlanOperation[] = [
+      {
+        action: "delete",
+        resource: {
+          type: "zone",
+          id: "zone-1",
+        },
+        dependencies: [],
+      },
+      {
+        action: "delete",
+        resource: {
+          type: "dns_record",
+          id: "record-1",
+        },
+        dependencies: [
+          {
+            type: "zone",
+            id: "zone-1",
+          },
+        ],
+      },
+    ];
+
+    const graph = buildOperationGraph(operations);
+    const ordered = topologicalOrderOperations(graph);
+
+    expect(ordered).toEqual([
+      {
+        type: "dns_record",
+        id: "record-1",
+      },
+      {
+        type: "zone",
+        id: "zone-1",
+      },
+    ]);
+  });
+
+  it("orders mixed lifecycle operations deterministically", () => {
+    const operations: PlanOperation[] = [
+      {
+        action: "update",
+        resource: {
+          type: "dns_record",
+          id: "record-1",
+        },
+        dependencies: [
+          {
+            type: "zone",
+            id: "zone-1",
+          },
+        ],
+      },
+      {
+        action: "create",
+        resource: {
+          type: "zone",
+          id: "zone-1",
+        },
+        dependencies: [],
+      },
+    ];
+
+    const graph = buildOperationGraph(operations);
+    const ordered = topologicalOrderOperations(graph);
+
+    expect(ordered).toEqual([
+      {
+        type: "zone",
+        id: "zone-1",
+      },
+      {
+        type: "dns_record",
+        id: "record-1",
+      },
+    ]);
   });
 });

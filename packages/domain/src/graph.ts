@@ -1,3 +1,4 @@
+import type { PlanAction, PlanOperation } from "./plan";
 import type { ResourceId } from "./resource";
 import { resourceIdKey } from "./state";
 import type { ResourceState } from "./state";
@@ -7,10 +8,22 @@ export interface ResourceGraph {
   dependencies: Map<string, ResourceId[]>;
 }
 
+export interface OperationGraph {
+  operations: ResourceId[];
+  dependencies: Map<string, ResourceId[]>;
+}
+
 export class ResourceGraphCycleError extends Error {
   constructor() {
     super("Resource graph contains a dependency cycle");
     this.name = "ResourceGraphCycleError";
+  }
+}
+
+export class OperationGraphCycleError extends Error {
+  constructor() {
+    super("Operation graph contains a dependency cycle");
+    this.name = "OperationGraphCycleError";
   }
 }
 
@@ -35,8 +48,89 @@ export function buildResourceGraph(resources: ResourceState[]): ResourceGraph {
 }
 
 export function topologicalOrder(graph: ResourceGraph): ResourceId[] {
+  return topologicalOrderGraph(
+    graph.resources,
+    graph.dependencies,
+    () => new ResourceGraphCycleError(),
+  );
+}
+
+export function buildOperationGraph(
+  operations: PlanOperation[],
+): OperationGraph {
+  const graph: OperationGraph = {
+    operations: operations.map((operation) => operation.resource),
+    dependencies: new Map(),
+  };
+
+  const operationByKey = new Map(
+    operations.map((operation) => [
+      resourceIdKey(operation.resource),
+      operation,
+    ]),
+  );
+
+  for (const operation of operations) {
+    graph.dependencies.set(resourceIdKey(operation.resource), []);
+  }
+
+  for (const operation of operations) {
+    const operationKey = resourceIdKey(operation.resource);
+
+    for (const dependency of operation.dependencies) {
+      const dependencyOperation = operationByKey.get(resourceIdKey(dependency));
+
+      if (!dependencyOperation) {
+        continue;
+      }
+
+      const dependencyKey = resourceIdKey(dependencyOperation.resource);
+
+      if (
+        operation.action === "delete" &&
+        dependencyOperation.action === "delete"
+      ) {
+        const operationDependencies =
+          graph.dependencies.get(operationKey) ?? [];
+
+        const dependencyDependencies =
+          graph.dependencies.get(dependencyKey) ?? [];
+
+        dependencyDependencies.push(operation.resource);
+
+        graph.dependencies.set(operationKey, operationDependencies);
+        graph.dependencies.set(dependencyKey, dependencyDependencies);
+      } else {
+        const operationDependencies =
+          graph.dependencies.get(operationKey) ?? [];
+
+        operationDependencies.push(dependencyOperation.resource);
+
+        graph.dependencies.set(operationKey, operationDependencies);
+      }
+    }
+  }
+
+  return graph;
+}
+
+export function topologicalOrderOperations(
+  graph: OperationGraph,
+): ResourceId[] {
+  return topologicalOrderGraph(
+    graph.operations,
+    graph.dependencies,
+    () => new OperationGraphCycleError(),
+  );
+}
+
+function topologicalOrderGraph(
+  resources: ResourceId[],
+  dependencies: Map<string, ResourceId[]>,
+  createCycleError: () => Error,
+): ResourceId[] {
   const resourceByKey = new Map(
-    graph.resources.map((resource) => [resourceIdKey(resource), resource]),
+    resources.map((resource) => [resourceIdKey(resource), resource]),
   );
 
   const visiting = new Set<string>();
@@ -51,12 +145,12 @@ export function topologicalOrder(graph: ResourceGraph): ResourceId[] {
     }
 
     if (visiting.has(key)) {
-      throw new ResourceGraphCycleError();
+      throw createCycleError();
     }
 
     visiting.add(key);
 
-    for (const dependency of graph.dependencies.get(key) ?? []) {
+    for (const dependency of dependencies.get(key) ?? []) {
       if (resourceByKey.has(resourceIdKey(dependency))) {
         visit(dependency);
       }
@@ -67,11 +161,11 @@ export function topologicalOrder(graph: ResourceGraph): ResourceId[] {
     ordered.push(resource);
   }
 
-  const resources = [...graph.resources].sort((left, right) =>
+  const sortedResources = [...resources].sort((left, right) =>
     resourceIdKey(left).localeCompare(resourceIdKey(right)),
   );
 
-  for (const resource of resources) {
+  for (const resource of sortedResources) {
     visit(resource);
   }
 
