@@ -1,0 +1,2 @@
+ALTER TABLE observed_resources
+ADD COLUMN position INTEGER NOT NULL DEFAULT 0;
