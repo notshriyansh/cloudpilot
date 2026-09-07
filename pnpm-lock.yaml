@@ -14,6 +14,12 @@ importers:
 
   apps/control-plane:
     dependencies:
+      '@cloudpilot/cloudflare-provider':
+        specifier: workspace:*
+        version: link:../../packages/cloudflare-provider
+      '@cloudpilot/inventory':
+        specifier: workspace:*
+        version: link:../../packages/inventory
       '@cloudpilot/state-store':
         specifier: workspace:*
         version: link:../../packages/state-store

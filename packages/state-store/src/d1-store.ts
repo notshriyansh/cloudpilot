@@ -1,4 +1,4 @@
-import type { ObservedState, ResourceState } from "@cloudpilot/domain";
+import type { ResourceState } from "@cloudpilot/domain";
 import type { Observation, StateStore } from "./store";
 
 interface ObservationRunRow {

@@ -19,6 +19,8 @@
     "wrangler": "^4.128.0"
   },
   "dependencies": {
+    "@cloudpilot/cloudflare-provider": "workspace:*",
+    "@cloudpilot/inventory": "workspace:*",
     "@cloudpilot/state-store": "workspace:*"
   }
 }

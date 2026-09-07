@@ -11,10 +11,12 @@
  * Learn more at https://developers.cloudflare.com/workers/
  */
 
-import { createAppResponse } from "./app";
+import { createProductionApp, handleRequest } from "./app";
 
 export default {
-  async fetch(_request, _env, _ctx): Promise<Response> {
-    return createAppResponse();
+  async fetch(request, env, _ctx): Promise<Response> {
+    const app = createProductionApp(env);
+
+    return handleRequest(request, app);
   },
 } satisfies ExportedHandler<Env>;
