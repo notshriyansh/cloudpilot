@@ -34,3 +34,4 @@ export type {
 } from "./evaluation";
 export { createPlanEvaluator } from "./evaluation";
 export type { ExecutionReadiness } from "./evaluation";
+export { validateDesiredState, type ValidationError } from "./validation";

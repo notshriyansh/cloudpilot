@@ -11,6 +11,7 @@ export interface IdGenerator {
 
 export interface ObservationService {
   inspect(): Promise<Observation>;
+  getLatest(): Promise<Observation | undefined>;
 }
 
 export function createObservationService(
@@ -38,6 +39,10 @@ export function createObservationService(
       await stateStore.saveObservation(observation);
 
       return observation;
+    },
+
+    async getLatest(): Promise<Observation | undefined> {
+      return stateStore.getLatestObservation();
     },
   };
 }

@@ -78,6 +78,36 @@ export async function handleRequest(
     }
   }
 
+  if (request.method === "GET" && url.pathname === "/state") {
+    try {
+      const observation = await app.observationService.getLatest();
+
+      if (observation === undefined) {
+        return Response.json(
+          {
+            error: "No observation available",
+          },
+          {
+            status: 404,
+          },
+        );
+      }
+
+      return Response.json(observation);
+    } catch (error) {
+      console.error("State retrieval failed", error);
+
+      return Response.json(
+        {
+          error: "State retrieval failed",
+        },
+        {
+          status: 500,
+        },
+      );
+    }
+  }
+
   return new Response("Not Found", {
     status: 404,
   });
