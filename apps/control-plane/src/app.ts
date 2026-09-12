@@ -64,7 +64,9 @@ export async function handleRequest(
       const observation = await app.observationService.inspect();
 
       return Response.json(observation);
-    } catch {
+    } catch (error) {
+      console.error("Inspection failed", error);
+
       return Response.json(
         {
           error: "Inspection failed",

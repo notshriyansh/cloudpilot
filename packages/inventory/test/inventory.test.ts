@@ -8,11 +8,12 @@ function createMockProvider(): CloudflareProvider {
     getAccount: vi.fn(),
     listZones: vi.fn(),
     listDnsRecords: vi.fn(),
+    listWorkers: vi.fn(),
   };
 }
 
 describe("inventory", () => {
-  it("maps Cloudflare zones and DNS records into observed state", async () => {
+  it("maps Cloudflare zones, DNS records, and Workers into observed state", async () => {
     const provider = createMockProvider();
 
     vi.mocked(provider.listZones).mockResolvedValue([
@@ -53,6 +54,15 @@ describe("inventory", () => {
           proxied: false,
         },
       ]);
+
+    vi.mocked(provider.listWorkers).mockResolvedValue([
+      {
+        id: "worker-1",
+        createdAt: "2026-09-01T10:00:00.000Z",
+        modifiedAt: "2026-09-10T12:00:00.000Z",
+        compatibilityDate: "2026-08-31",
+      },
+    ]);
 
     const inventory = createInventory(provider);
 
@@ -124,18 +134,31 @@ describe("inventory", () => {
             },
           ],
         },
+        {
+          resource: {
+            type: "worker",
+            id: "worker-1",
+          },
+          attributes: {
+            createdAt: "2026-09-01T10:00:00.000Z",
+            modifiedAt: "2026-09-10T12:00:00.000Z",
+            compatibilityDate: "2026-08-31",
+          },
+        },
       ],
     });
 
     expect(provider.listZones).toHaveBeenCalledTimes(1);
     expect(provider.listDnsRecords).toHaveBeenNthCalledWith(1, "zone-1");
     expect(provider.listDnsRecords).toHaveBeenNthCalledWith(2, "zone-2");
+    expect(provider.listWorkers).toHaveBeenCalledTimes(1);
   });
 
-  it("returns an empty observed state when no zones exist", async () => {
+  it("returns an empty observed state when no zones or Workers exist", async () => {
     const provider = createMockProvider();
 
     vi.mocked(provider.listZones).mockResolvedValue([]);
+    vi.mocked(provider.listWorkers).mockResolvedValue([]);
 
     const inventory = createInventory(provider);
 
@@ -144,6 +167,7 @@ describe("inventory", () => {
     });
 
     expect(provider.listDnsRecords).not.toHaveBeenCalled();
+    expect(provider.listWorkers).toHaveBeenCalledTimes(1);
   });
 
   it("lists DNS records for each zone and preserves their relationships", async () => {
@@ -188,6 +212,8 @@ describe("inventory", () => {
         },
       ]);
 
+    vi.mocked(provider.listWorkers).mockResolvedValue([]);
+
     const inventory = createInventory(provider);
 
     const observed = await inventory.inspect();
@@ -229,6 +255,52 @@ describe("inventory", () => {
         }),
       ]),
     );
+  });
+
+  it("lists and maps Workers into observed state", async () => {
+    const provider = createMockProvider();
+
+    vi.mocked(provider.listZones).mockResolvedValue([]);
+
+    vi.mocked(provider.listWorkers).mockResolvedValue([
+      {
+        id: "worker-1",
+        createdAt: "2026-09-01T10:00:00.000Z",
+        modifiedAt: "2026-09-10T12:00:00.000Z",
+        compatibilityDate: "2026-08-31",
+      },
+      {
+        id: "worker-2",
+      },
+    ]);
+
+    const inventory = createInventory(provider);
+
+    await expect(inventory.inspect()).resolves.toEqual({
+      resources: [
+        {
+          resource: {
+            type: "worker",
+            id: "worker-1",
+          },
+          attributes: {
+            createdAt: "2026-09-01T10:00:00.000Z",
+            modifiedAt: "2026-09-10T12:00:00.000Z",
+            compatibilityDate: "2026-08-31",
+          },
+        },
+        {
+          resource: {
+            type: "worker",
+            id: "worker-2",
+          },
+          attributes: {},
+        },
+      ],
+    });
+
+    expect(provider.listWorkers).toHaveBeenCalledTimes(1);
+    expect(provider.listDnsRecords).not.toHaveBeenCalled();
   });
 
   it("propagates provider errors", async () => {

@@ -4,11 +4,13 @@ import { createCloudflareApiClient } from "./api";
 import type { CloudflareDnsRecord } from "./dns-record";
 import { CloudflareProviderError } from "./errors";
 import type { CloudflareZone } from "./zone";
+import type { CloudflareWorker } from "./worker";
 
 export interface CloudflareProvider {
   getAccount(): Promise<CloudflareAccount>;
   listZones(): Promise<CloudflareZone[]>;
   listDnsRecords(zoneId: string): Promise<CloudflareDnsRecord[]>;
+  listWorkers(): Promise<CloudflareWorker[]>;
 }
 
 export function createCloudflareProvider(
@@ -146,6 +148,38 @@ export function createCloudflareProvider(
       }
 
       return records;
+    },
+    async listWorkers(): Promise<CloudflareWorker[]> {
+      const response = await api.request<unknown[]>(
+        `/accounts/${encodeURIComponent(config.accountId)}/workers/scripts`,
+      );
+
+      return response.result.map((worker) => {
+        if (
+          typeof worker !== "object" ||
+          worker === null ||
+          !("id" in worker) ||
+          typeof worker.id !== "string"
+        ) {
+          throw new CloudflareProviderError(
+            "Cloudflare API returned an invalid Worker result",
+          );
+        }
+
+        return {
+          id: worker.id,
+          ...("created_on" in worker && typeof worker.created_on === "string"
+            ? { createdAt: worker.created_on }
+            : {}),
+          ...("modified_on" in worker && typeof worker.modified_on === "string"
+            ? { modifiedAt: worker.modified_on }
+            : {}),
+          ...("compatibility_date" in worker &&
+          typeof worker.compatibility_date === "string"
+            ? { compatibilityDate: worker.compatibility_date }
+            : {}),
+        };
+      });
     },
   };
 }

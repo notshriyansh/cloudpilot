@@ -1,6 +1,8 @@
 import type { CloudflareProvider } from "@cloudpilot/cloudflare-provider";
 import type { ObservedState, ResourceState } from "@cloudpilot/domain";
+
 import { cloudflareDnsRecordToResource } from "./dns-record";
+import { cloudflareWorkerToResource } from "./worker";
 import { cloudflareZoneToResource } from "./zone";
 
 export interface Inventory {
@@ -23,7 +25,15 @@ export function createInventory(provider: CloudflareProvider): Inventory {
         }
       }
 
-      return { resources };
+      const workers = await provider.listWorkers();
+
+      for (const worker of workers) {
+        resources.push(cloudflareWorkerToResource(worker));
+      }
+
+      return {
+        resources,
+      };
     },
   };
 }

@@ -715,4 +715,176 @@ describe("CloudflareProvider", () => {
       CloudflareProviderError,
     );
   });
+
+  it("lists Workers for the configured account", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          result: [
+            {
+              id: "api-worker",
+              created_on: "2026-09-01T10:00:00.000Z",
+              modified_on: "2026-09-10T12:00:00.000Z",
+              compatibility_date: "2026-08-31",
+            },
+            {
+              id: "frontend-worker",
+              created_on: "2026-09-02T10:00:00.000Z",
+              modified_on: "2026-09-11T12:00:00.000Z",
+              compatibility_date: "2026-08-31",
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    );
+
+    const provider = createCloudflareProvider(
+      {
+        accountId: "account-123",
+        apiToken: "test-token",
+      },
+      fetchMock,
+    );
+
+    await expect(provider.listWorkers()).resolves.toEqual([
+      {
+        id: "api-worker",
+        createdAt: "2026-09-01T10:00:00.000Z",
+        modifiedAt: "2026-09-10T12:00:00.000Z",
+        compatibilityDate: "2026-08-31",
+      },
+      {
+        id: "frontend-worker",
+        createdAt: "2026-09-02T10:00:00.000Z",
+        modifiedAt: "2026-09-11T12:00:00.000Z",
+        compatibilityDate: "2026-08-31",
+      },
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.cloudflare.com/client/v4/accounts/account-123/workers/scripts",
+      {
+        method: "GET",
+        headers: {
+          Authorization: "Bearer test-token",
+          Accept: "application/json",
+        },
+      },
+    );
+  });
+
+  it("accepts Workers without optional metadata", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          result: [
+            {
+              id: "minimal-worker",
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    );
+
+    const provider = createCloudflareProvider(
+      {
+        accountId: "account-123",
+        apiToken: "test-token",
+      },
+      fetchMock,
+    );
+
+    await expect(provider.listWorkers()).resolves.toEqual([
+      {
+        id: "minimal-worker",
+      },
+    ]);
+  });
+
+  it("rejects malformed Workers", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          result: [
+            {
+              id: 123,
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    );
+
+    const provider = createCloudflareProvider(
+      {
+        accountId: "account-123",
+        apiToken: "test-token",
+      },
+      fetchMock,
+    );
+
+    await expect(provider.listWorkers()).rejects.toThrow(
+      "Cloudflare API returned an invalid Worker result",
+    );
+  });
+
+  it("propagates Cloudflare errors when listing Workers fails", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: false,
+          errors: [
+            {
+              code: 10000,
+              message: "Authentication error",
+            },
+          ],
+          result: null,
+        }),
+        {
+          status: 403,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    );
+
+    const provider = createCloudflareProvider(
+      {
+        accountId: "account-123",
+        apiToken: "test-token",
+      },
+      fetchMock,
+    );
+
+    await expect(provider.listWorkers()).rejects.toMatchObject({
+      name: "CloudflareProviderError",
+      status: 403,
+      code: 10000,
+      message: "Authentication error",
+    });
+  });
 });
