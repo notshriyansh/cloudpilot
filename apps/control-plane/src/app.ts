@@ -1,7 +1,5 @@
-import type { ManagementScope } from "@cloudpilot/domain";
 import { createCloudflareProvider } from "@cloudpilot/cloudflare-provider";
 import { createInventory, type Inventory } from "@cloudpilot/inventory";
-import { createD1StateStore, type StateStore } from "@cloudpilot/state-store";
 import {
   createObservationService,
   type Clock,
@@ -14,6 +12,12 @@ import {
   type PlanningService,
 } from "./planning";
 import { parseDesiredState } from "./desired-state";
+import {
+  createD1ManagementScopeStore,
+  createD1StateStore,
+  type ManagementScopeStore,
+  type StateStore,
+} from "@cloudpilot/state-store";
 
 export interface App {
   observationService: ObservationService;
@@ -25,7 +29,7 @@ export interface AppDependencies {
   stateStore: StateStore;
   clock: Clock;
   idGenerator: IdGenerator;
-  managementScope: ManagementScope;
+  managementScopeStore: ManagementScopeStore;
 }
 
 export function createApp(dependencies: AppDependencies): App {
@@ -38,7 +42,7 @@ export function createApp(dependencies: AppDependencies): App {
 
   const planningService = createPlanningService(
     dependencies.stateStore,
-    dependencies.managementScope,
+    dependencies.managementScopeStore,
   );
 
   return {
@@ -56,6 +60,8 @@ export function createProductionApp(env: Env) {
   const inventory = createInventory(provider);
   const stateStore = createD1StateStore(env.cloudpilot);
 
+  const managementScopeStore = createD1ManagementScopeStore(env.cloudpilot);
+
   return createApp({
     inventory,
     stateStore,
@@ -65,9 +71,7 @@ export function createProductionApp(env: Env) {
     idGenerator: {
       generate: () => crypto.randomUUID(),
     },
-    managementScope: {
-      resources: [],
-    },
+    managementScopeStore,
   });
 }
 

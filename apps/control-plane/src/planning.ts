@@ -1,10 +1,9 @@
 import {
   createPlanFromStates,
   type DesiredState,
-  type ManagementScope,
   type Plan,
 } from "@cloudpilot/domain";
-import type { StateStore } from "@cloudpilot/state-store";
+import type { ManagementScopeStore, StateStore } from "@cloudpilot/state-store";
 
 export interface PlanningService {
   plan(desired: DesiredState): Promise<Plan>;
@@ -12,7 +11,7 @@ export interface PlanningService {
 
 export function createPlanningService(
   stateStore: StateStore,
-  scope: ManagementScope,
+  managementScopeStore: ManagementScopeStore,
 ): PlanningService {
   return {
     async plan(desired: DesiredState): Promise<Plan> {
@@ -21,6 +20,8 @@ export function createPlanningService(
       if (observation === undefined) {
         throw new NoObservationError();
       }
+
+      const scope = await managementScopeStore.getScope();
 
       return createPlanFromStates(desired, observation.state, scope);
     },
