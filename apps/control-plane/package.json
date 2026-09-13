@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@cloudpilot/cloudflare-provider": "workspace:*",
+    "@cloudpilot/domain": "workspace:*",
     "@cloudpilot/inventory": "workspace:*",
     "@cloudpilot/state-store": "workspace:*"
   }

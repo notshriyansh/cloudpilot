@@ -17,6 +17,9 @@ importers:
       '@cloudpilot/cloudflare-provider':
         specifier: workspace:*
         version: link:../../packages/cloudflare-provider
+      '@cloudpilot/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@cloudpilot/inventory':
         specifier: workspace:*
         version: link:../../packages/inventory

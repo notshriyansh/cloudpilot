@@ -7,9 +7,16 @@ import {
   type IdGenerator,
   type ObservationService,
 } from "./observation";
+import {
+  createPlanningService,
+  NoObservationError,
+  type PlanningService,
+} from "./planning";
+import { parseDesiredState } from "./desired-state";
 
 export interface App {
   observationService: ObservationService;
+  planningService: PlanningService;
 }
 
 export interface AppDependencies {
@@ -27,8 +34,11 @@ export function createApp(dependencies: AppDependencies): App {
     dependencies.idGenerator,
   );
 
+  const planningService = createPlanningService(dependencies.stateStore);
+
   return {
     observationService,
+    planningService,
   };
 }
 
@@ -100,6 +110,125 @@ export async function handleRequest(
       return Response.json(
         {
           error: "State retrieval failed",
+        },
+        {
+          status: 500,
+        },
+      );
+    }
+  }
+
+  if (request.method === "POST" && url.pathname === "/plan") {
+    let body: unknown;
+
+    try {
+      body = await request.json();
+    } catch {
+      return Response.json(
+        {
+          error: "Invalid JSON",
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    const { parseDesiredState } = await import("./desired-state");
+    const result = parseDesiredState(body);
+
+    if (result.errors.length > 0) {
+      return Response.json(
+        {
+          error: "Invalid desired state",
+          errors: result.errors,
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    try {
+      const plan = await app.planningService.plan(result.state!);
+
+      return Response.json(plan);
+    } catch (error) {
+      if (error instanceof NoObservationError) {
+        return Response.json(
+          {
+            error: error.message,
+          },
+          {
+            status: 404,
+          },
+        );
+      }
+
+      console.error("Planning failed", error);
+
+      return Response.json(
+        {
+          error: "Planning failed",
+        },
+        {
+          status: 500,
+        },
+      );
+    }
+  }
+
+  if (request.method === "POST" && url.pathname === "/plan") {
+    let body: unknown;
+
+    try {
+      body = await request.json();
+    } catch {
+      return Response.json(
+        {
+          error: "Invalid JSON",
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    const result = parseDesiredState(body);
+
+    if (result.errors.length > 0) {
+      return Response.json(
+        {
+          error: "Invalid desired state",
+          errors: result.errors,
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    try {
+      const plan = await app.planningService.plan(result.state!);
+
+      return Response.json(plan);
+    } catch (error) {
+      if (error instanceof NoObservationError) {
+        return Response.json(
+          {
+            error: error.message,
+          },
+          {
+            status: 404,
+          },
+        );
+      }
+
+      console.error("Planning failed", error);
+
+      return Response.json(
+        {
+          error: "Planning failed",
         },
         {
           status: 500,
