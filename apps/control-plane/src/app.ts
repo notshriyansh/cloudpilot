@@ -18,10 +18,12 @@ import {
   type ManagementScopeStore,
   type StateStore,
 } from "@cloudpilot/state-store";
+import { createManagementService, type ManagementService } from "./management";
 
 export interface App {
   observationService: ObservationService;
   planningService: PlanningService;
+  managementService: ManagementService;
 }
 
 export interface AppDependencies {
@@ -45,9 +47,14 @@ export function createApp(dependencies: AppDependencies): App {
     dependencies.managementScopeStore,
   );
 
+  const managementService = createManagementService(
+    dependencies.managementScopeStore,
+  );
+
   return {
     observationService,
     planningService,
+    managementService,
   };
 }
 
