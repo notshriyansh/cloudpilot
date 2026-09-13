@@ -36,3 +36,4 @@ export { createPlanEvaluator } from "./evaluation";
 export type { ExecutionReadiness } from "./evaluation";
 export { validateDesiredState, type ValidationError } from "./validation";
 export { createPlanFromStates } from "./planning";
+export { filterChangesByScope, isManaged, type ManagementScope } from "./scope";

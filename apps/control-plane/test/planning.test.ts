@@ -36,9 +36,16 @@ describe("PlanningService", () => {
       getLatestObservation,
     };
 
-    const service = createPlanningService(stateStore);
+    const planningService = createPlanningService(stateStore, {
+      resources: [
+        {
+          type: "worker",
+          id: "payments-api",
+        },
+      ],
+    });
 
-    const plan = await service.plan(desired);
+    const plan = await planningService.plan(desired);
 
     expect(plan.operations).toEqual([
       {
@@ -61,10 +68,17 @@ describe("PlanningService", () => {
       getLatestObservation: vi.fn().mockResolvedValue(undefined),
     };
 
-    const service = createPlanningService(stateStore);
+    const planningService = createPlanningService(stateStore, {
+      resources: [
+        {
+          type: "worker",
+          id: "payments-api",
+        },
+      ],
+    });
 
     await expect(
-      service.plan({
+      planningService.plan({
         resources: [],
       }),
     ).rejects.toBeInstanceOf(NoObservationError);

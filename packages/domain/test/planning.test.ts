@@ -1,8 +1,30 @@
 import { describe, expect, it } from "vitest";
 import { createPlanFromStates } from "../src/planning";
 import type { DesiredState, ObservedState } from "../src/state";
+import type { ManagementScope } from "../src/scope";
 
 describe("createPlanFromStates", () => {
+  const workerScope: ManagementScope = {
+    resources: [
+      {
+        type: "worker",
+        id: "api",
+      },
+    ],
+  };
+
+  const dnsAndZoneScope: ManagementScope = {
+    resources: [
+      {
+        type: "dns_record",
+        id: "record-1",
+      },
+      {
+        type: "zone",
+        id: "example.com",
+      },
+    ],
+  };
   it("creates a plan for a missing resource", () => {
     const desired: DesiredState = {
       resources: [
@@ -22,7 +44,7 @@ describe("createPlanFromStates", () => {
       resources: [],
     };
 
-    expect(createPlanFromStates(desired, observed)).toEqual({
+    expect(createPlanFromStates(desired, observed, workerScope)).toEqual({
       operations: [
         {
           action: "create",
@@ -66,7 +88,7 @@ describe("createPlanFromStates", () => {
       ],
     };
 
-    expect(createPlanFromStates(desired, observed)).toEqual({
+    expect(createPlanFromStates(desired, observed, workerScope)).toEqual({
       operations: [
         {
           action: "update",
@@ -123,7 +145,7 @@ describe("createPlanFromStates", () => {
       ],
     };
 
-    expect(createPlanFromStates(desired, observed)).toEqual({
+    expect(createPlanFromStates(desired, observed, dnsAndZoneScope)).toEqual({
       operations: [
         {
           action: "delete",
@@ -188,12 +210,24 @@ describe("createPlanFromStates", () => {
         },
       ],
     };
+    const scope: ManagementScope = {
+      resources: [
+        {
+          type: "dns_record",
+          id: "record-1",
+        },
+        {
+          type: "zone",
+          id: "example.com",
+        },
+      ],
+    };
 
     const observed: ObservedState = {
       resources: [],
     };
 
-    const plan = createPlanFromStates(desired, observed);
+    const plan = createPlanFromStates(desired, observed, scope);
 
     expect(plan.operations.map((operation) => operation.resource)).toEqual([
       {
@@ -222,7 +256,68 @@ describe("createPlanFromStates", () => {
       ],
     };
 
-    expect(createPlanFromStates(state, state)).toEqual({
+    const scope: ManagementScope = {
+      resources: [
+        {
+          type: "worker",
+          id: "api",
+        },
+      ],
+    };
+
+    expect(createPlanFromStates(state, state, scope)).toEqual({
+      operations: [],
+    });
+  });
+
+  it("does not plan changes for observed resources outside the management scope", () => {
+    const observed: ObservedState = {
+      resources: [
+        {
+          resource: {
+            type: "worker",
+            id: "fluxion-api",
+          },
+          attributes: {
+            compatibilityDate: "2026-08-25",
+          },
+        },
+        {
+          resource: {
+            type: "worker",
+            id: "global-link-api",
+          },
+          attributes: {
+            compatibilityDate: "2026-03-03",
+          },
+        },
+      ],
+    };
+
+    const desired: DesiredState = {
+      resources: [
+        {
+          resource: {
+            type: "worker",
+            id: "fluxion-api",
+          },
+          attributes: {
+            compatibilityDate: "2026-08-25",
+          },
+        },
+      ],
+    };
+
+    const scope: ManagementScope = {
+      resources: [
+        {
+          type: "worker",
+          id: "fluxion-api",
+        },
+      ],
+    };
+
+    expect(createPlanFromStates(desired, observed, scope)).toEqual({
       operations: [],
     });
   });

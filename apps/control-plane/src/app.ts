@@ -1,3 +1,4 @@
+import type { ManagementScope } from "@cloudpilot/domain";
 import { createCloudflareProvider } from "@cloudpilot/cloudflare-provider";
 import { createInventory, type Inventory } from "@cloudpilot/inventory";
 import { createD1StateStore, type StateStore } from "@cloudpilot/state-store";
@@ -24,6 +25,7 @@ export interface AppDependencies {
   stateStore: StateStore;
   clock: Clock;
   idGenerator: IdGenerator;
+  managementScope: ManagementScope;
 }
 
 export function createApp(dependencies: AppDependencies): App {
@@ -34,7 +36,10 @@ export function createApp(dependencies: AppDependencies): App {
     dependencies.idGenerator,
   );
 
-  const planningService = createPlanningService(dependencies.stateStore);
+  const planningService = createPlanningService(
+    dependencies.stateStore,
+    dependencies.managementScope,
+  );
 
   return {
     observationService,
@@ -59,6 +64,9 @@ export function createProductionApp(env: Env) {
     },
     idGenerator: {
       generate: () => crypto.randomUUID(),
+    },
+    managementScope: {
+      resources: [],
     },
   });
 }
@@ -110,66 +118,6 @@ export async function handleRequest(
       return Response.json(
         {
           error: "State retrieval failed",
-        },
-        {
-          status: 500,
-        },
-      );
-    }
-  }
-
-  if (request.method === "POST" && url.pathname === "/plan") {
-    let body: unknown;
-
-    try {
-      body = await request.json();
-    } catch {
-      return Response.json(
-        {
-          error: "Invalid JSON",
-        },
-        {
-          status: 400,
-        },
-      );
-    }
-
-    const { parseDesiredState } = await import("./desired-state");
-    const result = parseDesiredState(body);
-
-    if (result.errors.length > 0) {
-      return Response.json(
-        {
-          error: "Invalid desired state",
-          errors: result.errors,
-        },
-        {
-          status: 400,
-        },
-      );
-    }
-
-    try {
-      const plan = await app.planningService.plan(result.state!);
-
-      return Response.json(plan);
-    } catch (error) {
-      if (error instanceof NoObservationError) {
-        return Response.json(
-          {
-            error: error.message,
-          },
-          {
-            status: 404,
-          },
-        );
-      }
-
-      console.error("Planning failed", error);
-
-      return Response.json(
-        {
-          error: "Planning failed",
         },
         {
           status: 500,
