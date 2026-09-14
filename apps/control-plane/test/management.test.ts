@@ -83,4 +83,27 @@ describe("ManagementService", () => {
     expect(managementScopeStore.add).toHaveBeenCalledOnce();
     expect(managementScopeStore.add).toHaveBeenCalledWith(resource);
   });
+
+  it("gets the current management scope", async () => {
+    const scope = {
+      resources: [
+        {
+          type: "worker" as const,
+          id: "fluxion-api",
+        },
+      ],
+    };
+
+    const managementScopeStore: ManagementScopeStore = {
+      add: vi.fn().mockResolvedValue(undefined),
+      remove: vi.fn().mockResolvedValue(undefined),
+      getScope: vi.fn().mockResolvedValue(scope),
+    };
+
+    const service = createManagementService(managementScopeStore);
+
+    await expect(service.getScope()).resolves.toEqual(scope);
+
+    expect(managementScopeStore.getScope).toHaveBeenCalledOnce();
+  });
 });

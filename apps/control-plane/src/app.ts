@@ -137,6 +137,25 @@ export async function handleRequest(
     }
   }
 
+  if (request.method === "GET" && url.pathname === "/managed-resources") {
+    try {
+      const scope = await app.managementService.getScope();
+
+      return Response.json(scope);
+    } catch (error) {
+      console.error("Management scope retrieval failed", error);
+
+      return Response.json(
+        {
+          error: "Management scope retrieval failed",
+        },
+        {
+          status: 500,
+        },
+      );
+    }
+  }
+
   if (request.method === "POST" && url.pathname === "/plan") {
     let body: unknown;
 

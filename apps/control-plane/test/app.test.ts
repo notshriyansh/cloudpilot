@@ -26,6 +26,11 @@ describe("handleRequest", () => {
       planningService: {
         plan: vi.fn(),
       },
+      managementService: {
+        register: vi.fn(),
+        unregister: vi.fn(),
+        getScope: vi.fn(),
+      },
     };
 
     const request = new Request("https://example.com/inspect");
@@ -49,6 +54,11 @@ describe("handleRequest", () => {
       planningService: {
         plan: vi.fn(),
       },
+      managementService: {
+        register: vi.fn(),
+        unregister: vi.fn(),
+        getScope: vi.fn(),
+      },
     };
 
     const request = new Request("https://example.com/");
@@ -70,6 +80,11 @@ describe("handleRequest", () => {
       },
       planningService: {
         plan: vi.fn(),
+      },
+      managementService: {
+        register: vi.fn(),
+        unregister: vi.fn(),
+        getScope: vi.fn(),
       },
     };
 
@@ -96,6 +111,11 @@ describe("handleRequest", () => {
       },
       planningService: {
         plan: vi.fn(),
+      },
+      managementService: {
+        register: vi.fn(),
+        unregister: vi.fn(),
+        getScope: vi.fn(),
       },
     };
 
@@ -132,6 +152,11 @@ describe("handleRequest", () => {
       planningService: {
         plan: vi.fn(),
       },
+      managementService: {
+        register: vi.fn(),
+        unregister: vi.fn(),
+        getScope: vi.fn(),
+      },
     };
 
     const request = new Request("https://example.com/state");
@@ -153,6 +178,11 @@ describe("handleRequest", () => {
       },
       planningService: {
         plan: vi.fn(),
+      },
+      managementService: {
+        register: vi.fn(),
+        unregister: vi.fn(),
+        getScope: vi.fn(),
       },
     };
 
@@ -178,6 +208,11 @@ describe("handleRequest", () => {
       },
       planningService: {
         plan: vi.fn(),
+      },
+      managementService: {
+        register: vi.fn(),
+        unregister: vi.fn(),
+        getScope: vi.fn(),
       },
     };
 
@@ -230,6 +265,11 @@ describe("handleRequest", () => {
       planningService: {
         plan: planning,
       },
+      managementService: {
+        register: vi.fn(),
+        unregister: vi.fn(),
+        getScope: vi.fn(),
+      },
     };
 
     const request = new Request("https://example.com/plan", {
@@ -260,6 +300,11 @@ describe("handleRequest", () => {
       planningService: {
         plan: planning,
       },
+      managementService: {
+        register: vi.fn(),
+        unregister: vi.fn(),
+        getScope: vi.fn(),
+      },
     };
 
     const request = new Request("https://example.com/plan", {
@@ -289,6 +334,11 @@ describe("handleRequest", () => {
       },
       planningService: {
         plan: planning,
+      },
+      managementService: {
+        register: vi.fn(),
+        unregister: vi.fn(),
+        getScope: vi.fn(),
       },
     };
 
@@ -328,6 +378,11 @@ describe("handleRequest", () => {
       planningService: {
         plan: planning,
       },
+      managementService: {
+        register: vi.fn(),
+        unregister: vi.fn(),
+        getScope: vi.fn(),
+      },
     };
 
     const request = new Request("https://example.com/plan", {
@@ -361,6 +416,11 @@ describe("handleRequest", () => {
       planningService: {
         plan: planning,
       },
+      managementService: {
+        register: vi.fn(),
+        unregister: vi.fn(),
+        getScope: vi.fn(),
+      },
     };
 
     const request = new Request("https://example.com/plan", {
@@ -378,6 +438,75 @@ describe("handleRequest", () => {
     expect(response.status).toBe(500);
     expect(await response.json()).toEqual({
       error: "Planning failed",
+    });
+  });
+
+  it("returns the current management scope", async () => {
+    const scope = {
+      resources: [
+        {
+          type: "worker" as const,
+          id: "fluxion-api",
+        },
+      ],
+    };
+
+    const managementService = {
+      register: vi.fn(),
+      unregister: vi.fn(),
+      getScope: vi.fn().mockResolvedValue(scope),
+    };
+
+    const app = {
+      observationService: {
+        inspect: vi.fn(),
+        getLatest: vi.fn(),
+      },
+      planningService: {
+        plan: vi.fn(),
+      },
+      managementService,
+    };
+
+    const response = await handleRequest(
+      new Request("http://localhost/managed-resources"),
+      app,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual(scope);
+    expect(managementService.getScope).toHaveBeenCalledOnce();
+  });
+
+  it("returns 500 when management scope retrieval fails", async () => {
+    const managementService = {
+      register: vi.fn(),
+      unregister: vi.fn(),
+      getScope: vi
+        .fn()
+        .mockRejectedValue(new Error("sensitive internal failure")),
+    };
+
+    const app = {
+      observationService: {
+        inspect: vi.fn(),
+        getLatest: vi.fn(),
+      },
+      planningService: {
+        plan: vi.fn(),
+      },
+      managementService,
+    };
+
+    const response = await handleRequest(
+      new Request("http://localhost/managed-resources"),
+      app,
+    );
+
+    expect(response.status).toBe(500);
+
+    await expect(response.json()).resolves.toEqual({
+      error: "Management scope retrieval failed",
     });
   });
 });

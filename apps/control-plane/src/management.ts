@@ -1,9 +1,10 @@
-import type { ManagementScopeStore } from "@cloudpilot/state-store";
 import type { ResourceId } from "@cloudpilot/domain";
+import type { ManagementScopeStore } from "@cloudpilot/state-store";
 
 export interface ManagementService {
   register(resource: ResourceId): Promise<void>;
   unregister(resource: ResourceId): Promise<void>;
+  getScope(): Promise<{ resources: ResourceId[] }>;
 }
 
 export function createManagementService(
@@ -16,6 +17,10 @@ export function createManagementService(
 
     async unregister(resource) {
       await managementScopeStore.remove(resource);
+    },
+
+    async getScope() {
+      return managementScopeStore.getScope();
     },
   };
 }
