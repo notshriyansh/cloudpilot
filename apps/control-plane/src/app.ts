@@ -19,6 +19,8 @@ import {
   type StateStore,
 } from "@cloudpilot/state-store";
 import { createManagementService, type ManagementService } from "./management";
+import { parseManagementResource } from "./management-request";
+import { parseManagementResourcePath } from "./management-resource-path";
 
 export interface App {
   observationService: ObservationService;
@@ -129,6 +131,120 @@ export async function handleRequest(
       return Response.json(
         {
           error: "State retrieval failed",
+        },
+        {
+          status: 500,
+        },
+      );
+    }
+  }
+
+  if (request.method === "POST" && url.pathname === "/managed-resources") {
+    let body: unknown;
+
+    try {
+      body = await request.json();
+    } catch {
+      return Response.json(
+        {
+          error: "Invalid JSON",
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    const result = parseManagementResource(body);
+
+    if (result.errors.length > 0) {
+      return Response.json(
+        {
+          error: "Invalid managed resource",
+          errors: result.errors,
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    try {
+      await app.managementService.register(result.resource!);
+
+      return Response.json(
+        {
+          resource: result.resource,
+        },
+        {
+          status: 201,
+        },
+      );
+    } catch (error) {
+      console.error("Management resource registration failed", error);
+
+      return Response.json(
+        {
+          error: "Management resource registration failed",
+        },
+        {
+          status: 500,
+        },
+      );
+    }
+  }
+
+  if (
+    request.method === "DELETE" &&
+    url.pathname.startsWith("/managed-resources/")
+  ) {
+    const parts = url.pathname.split("/");
+
+    if (parts.length !== 4 || parts[2] === "" || parts[3] === "") {
+      return Response.json(
+        {
+          error: "Invalid managed resource path",
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    const type = decodeURIComponent(parts[2]);
+    const id = decodeURIComponent(parts[3]);
+
+    const result = parseManagementResourcePath(type, id);
+
+    if (result.error !== undefined) {
+      return Response.json(
+        {
+          error: "Invalid managed resource",
+          errors: [
+            {
+              path: "resource",
+              message: result.error,
+            },
+          ],
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    try {
+      await app.managementService.unregister(result.resource);
+
+      return new Response(null, {
+        status: 204,
+      });
+    } catch (error) {
+      console.error("Management resource unregistration failed", error);
+
+      return Response.json(
+        {
+          error: "Management resource unregistration failed",
         },
         {
           status: 500,
