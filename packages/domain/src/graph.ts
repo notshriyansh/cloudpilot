@@ -47,6 +47,26 @@ export function buildResourceGraph(resources: ResourceState[]): ResourceGraph {
   return graph;
 }
 
+export function getDependents(
+  graph: ResourceGraph,
+  resource: ResourceId,
+): ResourceId[] {
+  const targetKey = resourceIdKey(resource);
+
+  return graph.resources
+    .filter((candidate) => {
+      const dependencies =
+        graph.dependencies.get(resourceIdKey(candidate)) ?? [];
+
+      return dependencies.some(
+        (dependency) => resourceIdKey(dependency) === targetKey,
+      );
+    })
+    .sort((left, right) =>
+      resourceIdKey(left).localeCompare(resourceIdKey(right)),
+    );
+}
+
 export function topologicalOrder(graph: ResourceGraph): ResourceId[] {
   return topologicalOrderGraph(
     graph.resources,

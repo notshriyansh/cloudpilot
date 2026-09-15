@@ -10,6 +10,7 @@ describe("default risk evaluator", () => {
     plan: {
       operations: [],
     },
+    impact: new Map(),
   };
 
   it("classifies DNS record creation as low risk", () => {

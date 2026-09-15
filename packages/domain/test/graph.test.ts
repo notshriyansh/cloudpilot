@@ -8,6 +8,7 @@ import {
   topologicalOrderOperations,
 } from "../src";
 import type { ResourceState, PlanOperation } from "../src";
+import { getDependents } from "../src/graph";
 
 describe("buildResourceGraph", () => {
   it("builds resources and belongs_to dependencies", () => {
@@ -442,6 +443,190 @@ describe("buildResourceGraph", () => {
       {
         type: "dns_record",
         id: "record-1",
+      },
+    ]);
+  });
+});
+
+describe("getDependents", () => {
+  it("returns resources that directly depend on a resource", () => {
+    const resources: ResourceState[] = [
+      {
+        resource: {
+          type: "zone",
+          id: "zone-1",
+        },
+        attributes: {
+          name: "example.com",
+        },
+      },
+      {
+        resource: {
+          type: "dns_record",
+          id: "record-1",
+        },
+        attributes: {},
+        relationships: [
+          {
+            type: "belongs_to",
+            resource: {
+              type: "zone",
+              id: "zone-1",
+            },
+          },
+        ],
+      },
+      {
+        resource: {
+          type: "dns_record",
+          id: "record-2",
+        },
+        attributes: {},
+        relationships: [
+          {
+            type: "belongs_to",
+            resource: {
+              type: "zone",
+              id: "zone-1",
+            },
+          },
+        ],
+      },
+    ];
+
+    const graph = buildResourceGraph(resources);
+
+    expect(
+      getDependents(graph, {
+        type: "zone",
+        id: "zone-1",
+      }),
+    ).toEqual([
+      {
+        type: "dns_record",
+        id: "record-1",
+      },
+      {
+        type: "dns_record",
+        id: "record-2",
+      },
+    ]);
+  });
+
+  it("returns no dependents for a resource without dependents", () => {
+    const resources: ResourceState[] = [
+      {
+        resource: {
+          type: "zone",
+          id: "zone-1",
+        },
+        attributes: {},
+      },
+    ];
+
+    const graph = buildResourceGraph(resources);
+
+    expect(
+      getDependents(graph, {
+        type: "zone",
+        id: "zone-1",
+      }),
+    ).toEqual([]);
+  });
+
+  it("finds dependents of a resource outside the graph", () => {
+    const resources: ResourceState[] = [
+      {
+        resource: {
+          type: "dns_record",
+          id: "record-1",
+        },
+        attributes: {},
+        relationships: [
+          {
+            type: "belongs_to",
+            resource: {
+              type: "zone",
+              id: "zone-missing",
+            },
+          },
+        ],
+      },
+    ];
+
+    const graph = buildResourceGraph(resources);
+
+    expect(
+      getDependents(graph, {
+        type: "zone",
+        id: "zone-missing",
+      }),
+    ).toEqual([
+      {
+        type: "dns_record",
+        id: "record-1",
+      },
+    ]);
+  });
+
+  it("returns dependents in deterministic order", () => {
+    const resources: ResourceState[] = [
+      {
+        resource: {
+          type: "zone",
+          id: "zone-1",
+        },
+        attributes: {},
+      },
+      {
+        resource: {
+          type: "dns_record",
+          id: "record-z",
+        },
+        attributes: {},
+        relationships: [
+          {
+            type: "belongs_to",
+            resource: {
+              type: "zone",
+              id: "zone-1",
+            },
+          },
+        ],
+      },
+      {
+        resource: {
+          type: "dns_record",
+          id: "record-a",
+        },
+        attributes: {},
+        relationships: [
+          {
+            type: "belongs_to",
+            resource: {
+              type: "zone",
+              id: "zone-1",
+            },
+          },
+        ],
+      },
+    ];
+
+    const graph = buildResourceGraph(resources);
+
+    expect(
+      getDependents(graph, {
+        type: "zone",
+        id: "zone-1",
+      }),
+    ).toEqual([
+      {
+        type: "dns_record",
+        id: "record-a",
+      },
+      {
+        type: "dns_record",
+        id: "record-z",
       },
     ]);
   });

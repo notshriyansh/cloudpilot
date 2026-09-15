@@ -1,8 +1,10 @@
 import type { ApprovalDecision, ApprovalEvaluator } from "./approval";
 import type { EvaluationContext } from "./evaluation-context";
+import { analyzeImpact } from "./impact";
 import type { Plan, PlanOperation } from "./plan";
 import type { Policy, PolicyDecision } from "./policy";
 import type { RiskAssessment, RiskEvaluator } from "./risk";
+import { resourceIdKey } from "./state";
 
 export interface EvaluatedOperation {
   operation: PlanOperation;
@@ -29,7 +31,17 @@ export function createPlanEvaluator(
 ): PlanEvaluator {
   return {
     evaluate(plan) {
-      const context: EvaluationContext = { plan };
+      const impact = new Map(
+        plan.operations.map((operation) => [
+          resourceIdKey(operation.resource),
+          analyzeImpact(operation, plan),
+        ]),
+      );
+
+      const context: EvaluationContext = {
+        plan,
+        impact,
+      };
 
       return {
         operations: plan.operations.map((operation) =>

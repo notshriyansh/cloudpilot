@@ -241,8 +241,8 @@ describe("plan evaluation", () => {
       ],
     };
 
-    let receivedPolicyContext: unknown;
-    let receivedRiskContext: unknown;
+    let receivedPolicyContext: EvaluationContext | undefined;
+    let receivedRiskContext: EvaluationContext | undefined;
 
     const policy = {
       evaluate(_operation: PlanOperation, context: EvaluationContext) {
@@ -274,7 +274,24 @@ describe("plan evaluation", () => {
 
     evaluator.evaluate(plan);
 
-    expect(receivedPolicyContext).toEqual({ plan });
-    expect(receivedRiskContext).toEqual({ plan });
+    expect(receivedPolicyContext).toBeDefined();
+    expect(receivedRiskContext).toBeDefined();
+
+    expect(receivedPolicyContext?.plan).toBe(plan);
+    expect(receivedRiskContext?.plan).toBe(plan);
+
+    expect(receivedPolicyContext?.impact).toBeDefined();
+    expect(receivedRiskContext?.impact).toBeDefined();
+
+    const workerImpact = receivedRiskContext?.impact.get("worker:worker-1");
+
+    expect(workerImpact).toEqual({
+      resources: [
+        {
+          type: "worker",
+          id: "worker-1",
+        },
+      ],
+    });
   });
 });

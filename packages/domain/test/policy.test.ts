@@ -10,6 +10,7 @@ describe("default policy", () => {
     plan: {
       operations: [],
     },
+    impact: new Map(),
   };
 
   it("allows creating a DNS record", () => {
