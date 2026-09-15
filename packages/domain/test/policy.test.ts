@@ -3,6 +3,8 @@ import type { PlanOperation } from "../src/plan";
 import { createDefaultPolicy } from "../src/policy";
 
 describe("default policy", () => {
+  const policy = createDefaultPolicy();
+
   it("allows creating a DNS record", () => {
     const operation: PlanOperation = {
       action: "create",
@@ -12,8 +14,6 @@ describe("default policy", () => {
       },
       dependencies: [],
     };
-
-    const policy = createDefaultPolicy();
 
     expect(policy.evaluate(operation)).toEqual({
       action: "allow",
@@ -31,7 +31,37 @@ describe("default policy", () => {
       dependencies: [],
     };
 
-    const policy = createDefaultPolicy();
+    expect(policy.evaluate(operation)).toEqual({
+      action: "allow",
+      reason: "Operation is permitted by the default policy",
+    });
+  });
+
+  it("allows deleting a DNS record", () => {
+    const operation: PlanOperation = {
+      action: "delete",
+      resource: {
+        type: "dns_record",
+        id: "record-1",
+      },
+      dependencies: [],
+    };
+
+    expect(policy.evaluate(operation)).toEqual({
+      action: "allow",
+      reason: "Operation is permitted by the default policy",
+    });
+  });
+
+  it("allows deleting a worker", () => {
+    const operation: PlanOperation = {
+      action: "delete",
+      resource: {
+        type: "worker",
+        id: "worker-1",
+      },
+      dependencies: [],
+    };
 
     expect(policy.evaluate(operation)).toEqual({
       action: "allow",
@@ -48,8 +78,6 @@ describe("default policy", () => {
       },
       dependencies: [],
     };
-
-    const policy = createDefaultPolicy();
 
     expect(policy.evaluate(operation)).toEqual({
       action: "deny",

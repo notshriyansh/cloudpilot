@@ -69,9 +69,41 @@ describe("default risk evaluator", () => {
     });
   });
 
-  it("defaults unknown mutations to medium risk", () => {
+  it("defaults worker creation to medium risk", () => {
     const operation: PlanOperation = {
       action: "create",
+      resource: {
+        type: "worker",
+        id: "worker-1",
+      },
+      dependencies: [],
+    };
+
+    expect(evaluator.assess(operation)).toEqual({
+      level: "medium",
+      reason: "Infrastructure mutation requires moderate caution",
+    });
+  });
+
+  it("defaults worker updates to medium risk", () => {
+    const operation: PlanOperation = {
+      action: "update",
+      resource: {
+        type: "worker",
+        id: "worker-1",
+      },
+      dependencies: [],
+    };
+
+    expect(evaluator.assess(operation)).toEqual({
+      level: "medium",
+      reason: "Infrastructure mutation requires moderate caution",
+    });
+  });
+
+  it("defaults worker deletion to medium risk", () => {
+    const operation: PlanOperation = {
+      action: "delete",
       resource: {
         type: "worker",
         id: "worker-1",

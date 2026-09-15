@@ -125,4 +125,96 @@ describe("plan evaluation", () => {
       result.operations.map(({ operation }) => operation.resource.id),
     ).toEqual(["record-a", "worker-a"]);
   });
+
+  it("blocks a policy-denied operation regardless of its risk", () => {
+    const plan: Plan = {
+      operations: [
+        {
+          action: "delete",
+          resource: {
+            type: "zone",
+            id: "zone-1",
+          },
+          dependencies: [],
+        },
+      ],
+    };
+
+    const result = evaluator.evaluate(plan);
+    const operation = result.operations[0];
+
+    expect(operation.policy.action).toBe("deny");
+    expect(operation.risk.level).toBe("critical");
+    expect(operation.approval.requirement).toBe("none");
+    expect(operation.readiness).toBe("blocked");
+  });
+
+  it("requires approval for an allowed high-risk operation", () => {
+    const plan: Plan = {
+      operations: [
+        {
+          action: "delete",
+          resource: {
+            type: "dns_record",
+            id: "record-1",
+          },
+          dependencies: [],
+        },
+      ],
+    };
+
+    const result = evaluator.evaluate(plan);
+    const operation = result.operations[0];
+
+    expect(operation.policy.action).toBe("allow");
+    expect(operation.risk.level).toBe("high");
+    expect(operation.approval.requirement).toBe("required");
+    expect(operation.readiness).toBe("approval_required");
+  });
+
+  it("marks an allowed low-risk operation as ready", () => {
+    const plan: Plan = {
+      operations: [
+        {
+          action: "create",
+          resource: {
+            type: "dns_record",
+            id: "record-1",
+          },
+          dependencies: [],
+        },
+      ],
+    };
+
+    const result = evaluator.evaluate(plan);
+    const operation = result.operations[0];
+
+    expect(operation.policy.action).toBe("allow");
+    expect(operation.risk.level).toBe("low");
+    expect(operation.approval.requirement).toBe("none");
+    expect(operation.readiness).toBe("ready");
+  });
+
+  it("marks an allowed medium-risk operation as ready", () => {
+    const plan: Plan = {
+      operations: [
+        {
+          action: "update",
+          resource: {
+            type: "worker",
+            id: "worker-1",
+          },
+          dependencies: [],
+        },
+      ],
+    };
+
+    const result = evaluator.evaluate(plan);
+    const operation = result.operations[0];
+
+    expect(operation.policy.action).toBe("allow");
+    expect(operation.risk.level).toBe("medium");
+    expect(operation.approval.requirement).toBe("none");
+    expect(operation.readiness).toBe("ready");
+  });
 });
