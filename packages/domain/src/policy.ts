@@ -1,3 +1,4 @@
+import type { EvaluationContext } from "./evaluation-context";
 import type { PlanOperation } from "./plan";
 
 export type PolicyAction = "allow" | "deny";
@@ -8,12 +9,15 @@ export interface PolicyDecision {
 }
 
 export interface Policy {
-  evaluate(operation: PlanOperation): PolicyDecision;
+  evaluate(
+    operation: PlanOperation,
+    context: EvaluationContext,
+  ): PolicyDecision;
 }
 
 export function createDefaultPolicy(): Policy {
   return {
-    evaluate(operation) {
+    evaluate(operation, _context) {
       if (operation.action === "delete" && operation.resource.type === "zone") {
         return {
           action: "deny",

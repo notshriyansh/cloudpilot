@@ -1,3 +1,4 @@
+import type { EvaluationContext } from "./evaluation-context";
 import type { PlanOperation } from "./plan";
 
 export type RiskLevel = "low" | "medium" | "high" | "critical";
@@ -8,12 +9,12 @@ export interface RiskAssessment {
 }
 
 export interface RiskEvaluator {
-  assess(operation: PlanOperation): RiskAssessment;
+  assess(operation: PlanOperation, context: EvaluationContext): RiskAssessment;
 }
 
 export function createDefaultRiskEvaluator(): RiskEvaluator {
   return {
-    assess(operation) {
+    assess(operation, _context) {
       if (operation.action === "delete" && operation.resource.type === "zone") {
         return {
           level: "critical",

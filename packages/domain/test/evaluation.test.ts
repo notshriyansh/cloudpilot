@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { createDefaultApprovalEvaluator } from "../src/approval";
 import { createPlanEvaluator } from "../src/evaluation";
-import type { Plan } from "../src/plan";
+import type { Plan, PlanOperation } from "../src/plan";
 import { createDefaultPolicy } from "../src/policy";
 import { createDefaultRiskEvaluator } from "../src/risk";
+import type { EvaluationContext } from "../src/evaluation-context";
 
 describe("plan evaluation", () => {
   const evaluator = createPlanEvaluator(
@@ -216,5 +217,64 @@ describe("plan evaluation", () => {
     expect(operation.risk.level).toBe("medium");
     expect(operation.approval.requirement).toBe("none");
     expect(operation.readiness).toBe("ready");
+  });
+
+  it("passes the complete plan as evaluation context", () => {
+    const plan: Plan = {
+      operations: [
+        {
+          action: "create",
+          resource: {
+            type: "worker",
+            id: "worker-1",
+          },
+          dependencies: [],
+        },
+        {
+          action: "update",
+          resource: {
+            type: "dns_record",
+            id: "record-1",
+          },
+          dependencies: [],
+        },
+      ],
+    };
+
+    let receivedPolicyContext: unknown;
+    let receivedRiskContext: unknown;
+
+    const policy = {
+      evaluate(_operation: PlanOperation, context: EvaluationContext) {
+        receivedPolicyContext = context;
+
+        return {
+          action: "allow" as const,
+          reason: "test",
+        };
+      },
+    };
+
+    const riskEvaluator = {
+      assess(_operation: PlanOperation, context: EvaluationContext) {
+        receivedRiskContext = context;
+
+        return {
+          level: "low" as const,
+          reason: "test",
+        };
+      },
+    };
+
+    const evaluator = createPlanEvaluator(
+      policy,
+      riskEvaluator,
+      createDefaultApprovalEvaluator(),
+    );
+
+    evaluator.evaluate(plan);
+
+    expect(receivedPolicyContext).toEqual({ plan });
+    expect(receivedRiskContext).toEqual({ plan });
   });
 });

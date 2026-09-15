@@ -1,9 +1,16 @@
 import { describe, expect, it } from "vitest";
 import type { PlanOperation } from "../src/plan";
 import { createDefaultRiskEvaluator } from "../src/risk";
+import type { EvaluationContext } from "../src/evaluation-context";
 
 describe("default risk evaluator", () => {
   const evaluator = createDefaultRiskEvaluator();
+
+  const context: EvaluationContext = {
+    plan: {
+      operations: [],
+    },
+  };
 
   it("classifies DNS record creation as low risk", () => {
     const operation: PlanOperation = {
@@ -15,7 +22,7 @@ describe("default risk evaluator", () => {
       dependencies: [],
     };
 
-    expect(evaluator.assess(operation)).toEqual({
+    expect(evaluator.assess(operation, context)).toEqual({
       level: "low",
       reason: "Creating a DNS record is a relatively low-risk operation",
     });
@@ -31,7 +38,7 @@ describe("default risk evaluator", () => {
       dependencies: [],
     };
 
-    expect(evaluator.assess(operation)).toEqual({
+    expect(evaluator.assess(operation, context)).toEqual({
       level: "medium",
       reason: "Updating a DNS record can affect traffic routing",
     });
@@ -47,7 +54,7 @@ describe("default risk evaluator", () => {
       dependencies: [],
     };
 
-    expect(evaluator.assess(operation)).toEqual({
+    expect(evaluator.assess(operation, context)).toEqual({
       level: "high",
       reason: "Deleting a DNS record can affect traffic routing",
     });
@@ -63,7 +70,7 @@ describe("default risk evaluator", () => {
       dependencies: [],
     };
 
-    expect(evaluator.assess(operation)).toEqual({
+    expect(evaluator.assess(operation, context)).toEqual({
       level: "critical",
       reason: "Deleting a zone can have a broad infrastructure impact",
     });
@@ -79,7 +86,7 @@ describe("default risk evaluator", () => {
       dependencies: [],
     };
 
-    expect(evaluator.assess(operation)).toEqual({
+    expect(evaluator.assess(operation, context)).toEqual({
       level: "medium",
       reason: "Infrastructure mutation requires moderate caution",
     });
@@ -95,7 +102,7 @@ describe("default risk evaluator", () => {
       dependencies: [],
     };
 
-    expect(evaluator.assess(operation)).toEqual({
+    expect(evaluator.assess(operation, context)).toEqual({
       level: "medium",
       reason: "Infrastructure mutation requires moderate caution",
     });
@@ -111,7 +118,7 @@ describe("default risk evaluator", () => {
       dependencies: [],
     };
 
-    expect(evaluator.assess(operation)).toEqual({
+    expect(evaluator.assess(operation, context)).toEqual({
       level: "medium",
       reason: "Infrastructure mutation requires moderate caution",
     });

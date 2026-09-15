@@ -1,4 +1,5 @@
 import type { ApprovalDecision, ApprovalEvaluator } from "./approval";
+import type { EvaluationContext } from "./evaluation-context";
 import type { Plan, PlanOperation } from "./plan";
 import type { Policy, PolicyDecision } from "./policy";
 import type { RiskAssessment, RiskEvaluator } from "./risk";
@@ -28,10 +29,13 @@ export function createPlanEvaluator(
 ): PlanEvaluator {
   return {
     evaluate(plan) {
+      const context: EvaluationContext = { plan };
+
       return {
         operations: plan.operations.map((operation) =>
           evaluateOperation(
             operation,
+            context,
             policy,
             riskEvaluator,
             approvalEvaluator,
@@ -59,12 +63,13 @@ function determineExecutionReadiness(
 
 function evaluateOperation(
   operation: PlanOperation,
+  context: EvaluationContext,
   policy: Policy,
   riskEvaluator: RiskEvaluator,
   approvalEvaluator: ApprovalEvaluator,
 ): EvaluatedOperation {
-  const policyDecision = policy.evaluate(operation);
-  const riskAssessment = riskEvaluator.assess(operation);
+  const policyDecision = policy.evaluate(operation, context);
+  const riskAssessment = riskEvaluator.assess(operation, context);
   const approvalDecision = approvalEvaluator.evaluate(
     policyDecision,
     riskAssessment,

@@ -1,9 +1,16 @@
 import { describe, expect, it } from "vitest";
 import type { PlanOperation } from "../src/plan";
 import { createDefaultPolicy } from "../src/policy";
+import type { EvaluationContext } from "../src/evaluation-context";
 
 describe("default policy", () => {
   const policy = createDefaultPolicy();
+
+  const context: EvaluationContext = {
+    plan: {
+      operations: [],
+    },
+  };
 
   it("allows creating a DNS record", () => {
     const operation: PlanOperation = {
@@ -15,7 +22,7 @@ describe("default policy", () => {
       dependencies: [],
     };
 
-    expect(policy.evaluate(operation)).toEqual({
+    expect(policy.evaluate(operation, context)).toEqual({
       action: "allow",
       reason: "Operation is permitted by the default policy",
     });
@@ -31,7 +38,7 @@ describe("default policy", () => {
       dependencies: [],
     };
 
-    expect(policy.evaluate(operation)).toEqual({
+    expect(policy.evaluate(operation, context)).toEqual({
       action: "allow",
       reason: "Operation is permitted by the default policy",
     });
@@ -47,7 +54,7 @@ describe("default policy", () => {
       dependencies: [],
     };
 
-    expect(policy.evaluate(operation)).toEqual({
+    expect(policy.evaluate(operation, context)).toEqual({
       action: "allow",
       reason: "Operation is permitted by the default policy",
     });
@@ -63,7 +70,7 @@ describe("default policy", () => {
       dependencies: [],
     };
 
-    expect(policy.evaluate(operation)).toEqual({
+    expect(policy.evaluate(operation, context)).toEqual({
       action: "allow",
       reason: "Operation is permitted by the default policy",
     });
@@ -79,7 +86,7 @@ describe("default policy", () => {
       dependencies: [],
     };
 
-    expect(policy.evaluate(operation)).toEqual({
+    expect(policy.evaluate(operation, context)).toEqual({
       action: "deny",
       reason: "Deleting zones is not permitted by the default policy",
     });
