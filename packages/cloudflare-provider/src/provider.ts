@@ -4,13 +4,20 @@ import { createCloudflareApiClient } from "./api";
 import type { CloudflareDnsRecord } from "./dns-record";
 import { CloudflareProviderError } from "./errors";
 import type { CloudflareZone } from "./zone";
-import type { CloudflareWorker } from "./worker";
+import type { CloudflareWorker, CloudflareWorkerDeployment } from "./worker";
 
 export interface CloudflareProvider {
   getAccount(): Promise<CloudflareAccount>;
   listZones(): Promise<CloudflareZone[]>;
   listDnsRecords(zoneId: string): Promise<CloudflareDnsRecord[]>;
   listWorkers(): Promise<CloudflareWorker[]>;
+
+  deployWorker(
+    scriptName: string,
+    deployment: CloudflareWorkerDeployment,
+  ): Promise<void>;
+
+  deleteWorker(scriptName: string): Promise<void>;
 }
 
 export function createCloudflareProvider(
@@ -149,6 +156,7 @@ export function createCloudflareProvider(
 
       return records;
     },
+
     async listWorkers(): Promise<CloudflareWorker[]> {
       const response = await api.request<unknown[]>(
         `/accounts/${encodeURIComponent(config.accountId)}/workers/scripts`,
@@ -180,6 +188,41 @@ export function createCloudflareProvider(
             : {}),
         };
       });
+    },
+
+    async deployWorker(
+      scriptName: string,
+      deployment: CloudflareWorkerDeployment,
+    ): Promise<void> {
+      const metadata = {
+        main_module: "index.js",
+        ...(deployment.compatibilityDate
+          ? { compatibility_date: deployment.compatibilityDate }
+          : {}),
+      };
+
+      const formData = new FormData();
+
+      formData.append("metadata", JSON.stringify(metadata));
+
+      formData.append(
+        "index.js",
+        new Blob([deployment.script], {
+          type: "application/javascript+module",
+        }),
+        "index.js",
+      );
+
+      await api.putMultipart<unknown>(
+        `/accounts/${encodeURIComponent(config.accountId)}/workers/scripts/${encodeURIComponent(scriptName)}`,
+        formData,
+      );
+    },
+
+    async deleteWorker(scriptName: string): Promise<void> {
+      await api.delete<unknown>(
+        `/accounts/${encodeURIComponent(config.accountId)}/workers/scripts/${encodeURIComponent(scriptName)}`,
+      );
     },
   };
 }

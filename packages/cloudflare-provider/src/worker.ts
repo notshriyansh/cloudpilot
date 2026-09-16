@@ -4,3 +4,8 @@ export interface CloudflareWorker {
   modifiedAt?: string;
   compatibilityDate?: string;
 }
+
+export interface CloudflareWorkerDeployment {
+  script: string;
+  compatibilityDate?: string;
+}

@@ -9,6 +9,8 @@ function createMockProvider(): CloudflareProvider {
     listZones: vi.fn(),
     listDnsRecords: vi.fn(),
     listWorkers: vi.fn(),
+    deployWorker: vi.fn(),
+    deleteWorker: vi.fn(),
   };
 }
 

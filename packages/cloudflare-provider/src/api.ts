@@ -15,6 +15,13 @@ export interface CloudflareApiResponse<T> {
 
 export interface CloudflareApiClient {
   request<T>(path: string): Promise<CloudflareApiResponse<T>>;
+
+  putMultipart<T>(
+    path: string,
+    formData: FormData,
+  ): Promise<CloudflareApiResponse<T>>;
+
+  delete<T>(path: string): Promise<CloudflareApiResponse<T>>;
 }
 
 function parseCloudflareErrors(body: unknown): CloudflareApiError[] {
@@ -38,89 +45,126 @@ function parseCloudflareErrors(body: unknown): CloudflareApiError[] {
   );
 }
 
+function parseResultInfo(
+  body: object,
+): CloudflareApiResponse<unknown>["resultInfo"] {
+  if (
+    !("result_info" in body) ||
+    typeof body.result_info !== "object" ||
+    body.result_info === null
+  ) {
+    return undefined;
+  }
+
+  const resultInfo = body.result_info;
+
+  if (
+    !("page" in resultInfo) ||
+    typeof resultInfo.page !== "number" ||
+    !("per_page" in resultInfo) ||
+    typeof resultInfo.per_page !== "number" ||
+    !("total_pages" in resultInfo) ||
+    typeof resultInfo.total_pages !== "number" ||
+    !("total" in resultInfo) ||
+    typeof resultInfo.total !== "number"
+  ) {
+    return undefined;
+  }
+
+  return {
+    page: resultInfo.page,
+    perPage: resultInfo.per_page,
+    totalPages: resultInfo.total_pages,
+    total: resultInfo.total,
+  };
+}
+
 export function createCloudflareApiClient(
   apiToken: string,
   fetchImpl: typeof fetch = fetch,
 ): CloudflareApiClient {
+  async function request<T>(
+    path: string,
+    init: RequestInit,
+  ): Promise<CloudflareApiResponse<T>> {
+    const response = await fetchImpl(`${API_BASE_URL}${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${apiToken}`,
+        Accept: "application/json",
+        ...init.headers,
+      },
+    });
+
+    let body: unknown;
+
+    try {
+      body = await response.json();
+    } catch {
+      throw new CloudflareProviderError(
+        `Cloudflare API returned an invalid response with status ${response.status}`,
+        response.status,
+      );
+    }
+
+    if (
+      typeof body !== "object" ||
+      body === null ||
+      !("success" in body) ||
+      typeof body.success !== "boolean"
+    ) {
+      throw new CloudflareProviderError(
+        "Cloudflare API returned an invalid response",
+        response.status,
+      );
+    }
+
+    if (!body.success) {
+      const errors = parseCloudflareErrors(body);
+      const firstError = errors[0];
+
+      throw new CloudflareProviderError(
+        firstError?.message ??
+          `Cloudflare API request failed with status ${response.status}`,
+        response.status,
+        firstError?.code,
+      );
+    }
+
+    if (!("result" in body)) {
+      throw new CloudflareProviderError(
+        "Cloudflare API returned an invalid response",
+        response.status,
+      );
+    }
+
+    return {
+      result: body.result as T,
+      resultInfo: parseResultInfo(body),
+    };
+  }
+
   return {
-    async request<T>(path: string): Promise<CloudflareApiResponse<T>> {
-      const response = await fetchImpl(`${API_BASE_URL}${path}`, {
+    request<T>(path: string): Promise<CloudflareApiResponse<T>> {
+      return request<T>(path, {
         method: "GET",
-        headers: {
-          Authorization: `Bearer ${apiToken}`,
-          Accept: "application/json",
-        },
       });
+    },
 
-      let body: unknown;
+    putMultipart<T>(
+      path: string,
+      formData: FormData,
+    ): Promise<CloudflareApiResponse<T>> {
+      return request<T>(path, {
+        method: "PUT",
+        body: formData,
+      });
+    },
 
-      try {
-        body = await response.json();
-      } catch {
-        throw new CloudflareProviderError(
-          `Cloudflare API returned an invalid response with status ${response.status}`,
-          response.status,
-        );
-      }
-
-      if (
-        typeof body !== "object" ||
-        body === null ||
-        !("success" in body) ||
-        typeof body.success !== "boolean"
-      ) {
-        throw new CloudflareProviderError(
-          "Cloudflare API returned an invalid response",
-          response.status,
-        );
-      }
-
-      if (!body.success) {
-        const errors = parseCloudflareErrors(body);
-        const firstError = errors[0];
-
-        throw new CloudflareProviderError(
-          firstError?.message ??
-            `Cloudflare API request failed with status ${response.status}`,
-          response.status,
-          firstError?.code,
-        );
-      }
-
-      if (!("result" in body)) {
-        throw new CloudflareProviderError(
-          "Cloudflare API returned an invalid response",
-          response.status,
-        );
-      }
-
-      const resultInfo =
-        "result_info" in body &&
-        typeof body.result_info === "object" &&
-        body.result_info !== null
-          ? body.result_info
-          : undefined;
-
-      return {
-        result: body.result as T,
-        resultInfo:
-          resultInfo &&
-          "page" in resultInfo &&
-          typeof resultInfo.page === "number" &&
-          "per_page" in resultInfo &&
-          typeof resultInfo.per_page === "number" &&
-          "total_pages" in resultInfo &&
-          typeof resultInfo.total_pages === "number" &&
-          "total" in resultInfo &&
-          typeof resultInfo.total === "number"
-            ? {
-                page: resultInfo.page,
-                perPage: resultInfo.per_page,
-                totalPages: resultInfo.total_pages,
-                total: resultInfo.total,
-              }
-            : undefined,
-      };
+    delete<T>(path: string): Promise<CloudflareApiResponse<T>> {
+      return request<T>(path, {
+        method: "DELETE",
+      });
     },
   };
 }

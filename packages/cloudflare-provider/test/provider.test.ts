@@ -887,4 +887,233 @@ describe("CloudflareProvider", () => {
       message: "Authentication error",
     });
   });
+
+  it("deploys a Worker using multipart module upload", async () => {
+    let request: Request | undefined;
+
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async (input, init) => {
+        request = new Request(input, init);
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            result: {
+              id: "new-worker",
+            },
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+        );
+      });
+
+    const provider = createCloudflareProvider(
+      {
+        accountId: "account-123",
+        apiToken: "token-123",
+      },
+      fetchImpl,
+    );
+
+    await provider.deployWorker("new-worker", {
+      script: `export default {
+  fetch() {
+    return new Response("hello");
+  },
+}`,
+      compatibilityDate: "2026-08-31",
+    });
+
+    expect(request?.method).toBe("PUT");
+
+    expect(request?.url).toBe(
+      "https://api.cloudflare.com/client/v4/accounts/account-123/workers/scripts/new-worker",
+    );
+
+    const formData = await request?.formData();
+
+    expect(formData).toBeDefined();
+
+    const metadata = formData?.get("metadata");
+
+    expect(metadata).toBe(
+      JSON.stringify({
+        main_module: "index.js",
+        compatibility_date: "2026-08-31",
+      }),
+    );
+
+    const script = formData?.get("index.js");
+
+    expect(script).toBeInstanceOf(File);
+
+    await expect((script as File).text()).resolves.toContain(
+      'return new Response("hello")',
+    );
+  });
+
+  it("deploys a Worker without compatibility metadata when none is provided", async () => {
+    let request: Request | undefined;
+
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async (input, init) => {
+        request = new Request(input, init);
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            result: {
+              id: "new-worker",
+            },
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+        );
+      });
+
+    const provider = createCloudflareProvider(
+      {
+        accountId: "account-123",
+        apiToken: "token-123",
+      },
+      fetchImpl,
+    );
+
+    await provider.deployWorker("new-worker", {
+      script: "export default { fetch() { return new Response('ok'); } };",
+    });
+
+    const formData = await request?.formData();
+
+    expect(formData?.get("metadata")).toBe(
+      JSON.stringify({
+        main_module: "index.js",
+      }),
+    );
+  });
+
+  it("propagates Worker deployment API errors", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: false,
+          errors: [
+            {
+              code: 10001,
+              message: "Authentication error",
+            },
+          ],
+        }),
+        {
+          status: 403,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    );
+
+    const provider = createCloudflareProvider(
+      {
+        accountId: "account-123",
+        apiToken: "token-123",
+      },
+      fetchImpl,
+    );
+
+    await expect(
+      provider.deployWorker("worker-1", {
+        script: "export default { fetch() {} };",
+      }),
+    ).rejects.toMatchObject({
+      message: "Authentication error",
+      status: 403,
+      code: 10001,
+    });
+  });
+
+  it("deletes a Worker", async () => {
+    let request: Request | undefined;
+
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async (input, init) => {
+        request = new Request(input, init);
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            result: {},
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+        );
+      });
+
+    const provider = createCloudflareProvider(
+      {
+        accountId: "account-123",
+        apiToken: "token-123",
+      },
+      fetchImpl,
+    );
+
+    await provider.deleteWorker("worker-1");
+
+    expect(request?.method).toBe("DELETE");
+
+    expect(request?.url).toBe(
+      "https://api.cloudflare.com/client/v4/accounts/account-123/workers/scripts/worker-1",
+    );
+  });
+
+  it("propagates Worker deletion API errors", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: false,
+          errors: [
+            {
+              code: 10001,
+              message: "Authentication error",
+            },
+          ],
+        }),
+        {
+          status: 403,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    );
+
+    const provider = createCloudflareProvider(
+      {
+        accountId: "account-123",
+        apiToken: "token-123",
+      },
+      fetchImpl,
+    );
+
+    await expect(provider.deleteWorker("worker-1")).rejects.toMatchObject({
+      message: "Authentication error",
+      status: 403,
+      code: 10001,
+    });
+  });
 });
