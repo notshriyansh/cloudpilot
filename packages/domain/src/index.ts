@@ -40,3 +40,5 @@ export { filterChangesByScope, isManaged, type ManagementScope } from "./scope";
 export * from "./impact";
 export type { EvaluationContext } from "./evaluation-context";
 export { getDependents } from "./graph";
+export * from "./execution";
+export * from "./plan-executor";
