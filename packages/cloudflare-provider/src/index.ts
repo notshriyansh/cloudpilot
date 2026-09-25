@@ -5,3 +5,4 @@ export { createCloudflareProvider, type CloudflareProvider } from "./provider";
 export type { CloudflareZone } from "./zone";
 export type { CloudflareDnsRecord } from "./dns-record";
 export type { CloudflareWorker } from "./worker";
+export * from "./worker-operation";

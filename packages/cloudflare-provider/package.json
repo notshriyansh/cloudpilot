@@ -2,6 +2,9 @@
   "name": "@cloudpilot/cloudflare-provider",
   "version": "0.1.0",
   "private": true,
+  "dependencies": {
+    "@cloudpilot/domain": "workspace:*"
+  },
   "type": "module",
   "exports": {
     ".": "./src/index.ts"

@@ -44,6 +44,10 @@ importers:
         version: 4.128.0(@cloudflare/workers-types@5.20260905.1)
 
   packages/cloudflare-provider:
+    dependencies:
+      '@cloudpilot/domain':
+        specifier: workspace:*
+        version: link:../domain
     devDependencies:
       typescript:
         specifier: ^5.5.2
