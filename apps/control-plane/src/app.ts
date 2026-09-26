@@ -1,4 +1,7 @@
-import { createCloudflareProvider } from "@cloudpilot/cloudflare-provider";
+import {
+  createCloudflareOperationExecutor,
+  createCloudflareProvider,
+} from "@cloudpilot/cloudflare-provider";
 import { createInventory, type Inventory } from "@cloudpilot/inventory";
 import {
   createObservationService,
@@ -21,11 +24,14 @@ import {
 import { createManagementService, type ManagementService } from "./management";
 import { parseManagementResource } from "./management-request";
 import { parseManagementResourcePath } from "./management-resource-path";
+import { createExecutionService, type ExecutionService } from "./execution";
+import { OperationExecutor } from "@cloudpilot/domain";
 
 export interface App {
   observationService: ObservationService;
   planningService: PlanningService;
   managementService: ManagementService;
+  executionService: ExecutionService;
 }
 
 export interface AppDependencies {
@@ -34,6 +40,7 @@ export interface AppDependencies {
   clock: Clock;
   idGenerator: IdGenerator;
   managementScopeStore: ManagementScopeStore;
+  operationExecutor: OperationExecutor;
 }
 
 export function createApp(dependencies: AppDependencies): App {
@@ -53,10 +60,15 @@ export function createApp(dependencies: AppDependencies): App {
     dependencies.managementScopeStore,
   );
 
+  const executionService = createExecutionService(
+    dependencies.operationExecutor,
+  );
+
   return {
     observationService,
     planningService,
     managementService,
+    executionService,
   };
 }
 
@@ -65,6 +77,8 @@ export function createProductionApp(env: Env) {
     accountId: env.CLOUDFLARE_ACCOUNT_ID,
     apiToken: env.CLOUDFLARE_API_TOKEN,
   });
+
+  const operationExecutor = createCloudflareOperationExecutor(provider);
 
   const inventory = createInventory(provider);
   const stateStore = createD1StateStore(env.cloudpilot);
@@ -81,6 +95,7 @@ export function createProductionApp(env: Env) {
       generate: () => crypto.randomUUID(),
     },
     managementScopeStore,
+    operationExecutor,
   });
 }
 
@@ -323,6 +338,66 @@ export async function handleRequest(
       return Response.json(
         {
           error: "Planning failed",
+        },
+        {
+          status: 500,
+        },
+      );
+    }
+  }
+
+  if (request.method === "POST" && url.pathname === "/execute") {
+    let body: unknown;
+
+    try {
+      body = await request.json();
+    } catch {
+      return Response.json(
+        {
+          error: "Invalid JSON",
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    const result = parseDesiredState(body);
+
+    if (result.errors.length > 0) {
+      return Response.json(
+        {
+          error: "Invalid desired state",
+          errors: result.errors,
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    try {
+      const plan = await app.planningService.plan(result.state!);
+      const report = await app.executionService.execute(plan);
+
+      return Response.json(report);
+    } catch (error) {
+      if (error instanceof NoObservationError) {
+        return Response.json(
+          {
+            error: error.message,
+          },
+          {
+            status: 404,
+          },
+        );
+      }
+
+      console.error("Execution failed", error);
+
+      return Response.json(
+        {
+          error: "Execution failed",
         },
         {
           status: 500,

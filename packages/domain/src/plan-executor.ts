@@ -9,7 +9,7 @@ import {
   buildOperationGraph,
   topologicalOrderOperations,
 } from "./graph";
-import type { Plan, PlanOperation } from "./plan";
+import type { Plan } from "./plan";
 import { resourceIdKey } from "./state";
 
 export class PlanExecutionCycleError extends Error {
@@ -73,9 +73,17 @@ export function createPlanExecutor(
           continue;
         }
 
-        const result = await operationExecutor.execute(operation);
+        try {
+          const result = await operationExecutor.execute(operation);
 
-        resultsByKey.set(key, result);
+          resultsByKey.set(key, result);
+        } catch (error) {
+          resultsByKey.set(key, {
+            operation,
+            status: "failed",
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
       }
 
       return {

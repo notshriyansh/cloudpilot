@@ -31,6 +31,9 @@ describe("handleRequest", () => {
         unregister: vi.fn(),
         getScope: vi.fn(),
       },
+      executionService: {
+        execute: vi.fn(),
+      },
     };
 
     const request = new Request("https://example.com/inspect");
@@ -59,6 +62,9 @@ describe("handleRequest", () => {
         unregister: vi.fn(),
         getScope: vi.fn(),
       },
+      executionService: {
+        execute: vi.fn(),
+      },
     };
 
     const request = new Request("https://example.com/");
@@ -85,6 +91,9 @@ describe("handleRequest", () => {
         register: vi.fn(),
         unregister: vi.fn(),
         getScope: vi.fn(),
+      },
+      executionService: {
+        execute: vi.fn(),
       },
     };
 
@@ -116,6 +125,9 @@ describe("handleRequest", () => {
         register: vi.fn(),
         unregister: vi.fn(),
         getScope: vi.fn(),
+      },
+      executionService: {
+        execute: vi.fn(),
       },
     };
 
@@ -157,6 +169,9 @@ describe("handleRequest", () => {
         unregister: vi.fn(),
         getScope: vi.fn(),
       },
+      executionService: {
+        execute: vi.fn(),
+      },
     };
 
     const request = new Request("https://example.com/state");
@@ -183,6 +198,9 @@ describe("handleRequest", () => {
         register: vi.fn(),
         unregister: vi.fn(),
         getScope: vi.fn(),
+      },
+      executionService: {
+        execute: vi.fn(),
       },
     };
 
@@ -213,6 +231,9 @@ describe("handleRequest", () => {
         register: vi.fn(),
         unregister: vi.fn(),
         getScope: vi.fn(),
+      },
+      executionService: {
+        execute: vi.fn(),
       },
     };
 
@@ -270,6 +291,9 @@ describe("handleRequest", () => {
         unregister: vi.fn(),
         getScope: vi.fn(),
       },
+      executionService: {
+        execute: vi.fn(),
+      },
     };
 
     const request = new Request("https://example.com/plan", {
@@ -305,6 +329,9 @@ describe("handleRequest", () => {
         unregister: vi.fn(),
         getScope: vi.fn(),
       },
+      executionService: {
+        execute: vi.fn(),
+      },
     };
 
     const request = new Request("https://example.com/plan", {
@@ -339,6 +366,9 @@ describe("handleRequest", () => {
         register: vi.fn(),
         unregister: vi.fn(),
         getScope: vi.fn(),
+      },
+      executionService: {
+        execute: vi.fn(),
       },
     };
 
@@ -383,6 +413,9 @@ describe("handleRequest", () => {
         unregister: vi.fn(),
         getScope: vi.fn(),
       },
+      executionService: {
+        execute: vi.fn(),
+      },
     };
 
     const request = new Request("https://example.com/plan", {
@@ -421,6 +454,9 @@ describe("handleRequest", () => {
         unregister: vi.fn(),
         getScope: vi.fn(),
       },
+      executionService: {
+        execute: vi.fn(),
+      },
     };
 
     const request = new Request("https://example.com/plan", {
@@ -457,7 +493,7 @@ describe("handleRequest", () => {
       getScope: vi.fn().mockResolvedValue(scope),
     };
 
-    const app = {
+    const app: App = {
       observationService: {
         inspect: vi.fn(),
         getLatest: vi.fn(),
@@ -466,6 +502,9 @@ describe("handleRequest", () => {
         plan: vi.fn(),
       },
       managementService,
+      executionService: {
+        execute: vi.fn(),
+      },
     };
 
     const response = await handleRequest(
@@ -487,7 +526,7 @@ describe("handleRequest", () => {
         .mockRejectedValue(new Error("sensitive internal failure")),
     };
 
-    const app = {
+    const app: App = {
       observationService: {
         inspect: vi.fn(),
         getLatest: vi.fn(),
@@ -496,6 +535,9 @@ describe("handleRequest", () => {
         plan: vi.fn(),
       },
       managementService,
+      executionService: {
+        execute: vi.fn(),
+      },
     };
 
     const response = await handleRequest(
@@ -525,6 +567,9 @@ describe("handleRequest", () => {
         register,
         unregister: vi.fn(),
         getScope: vi.fn(),
+      },
+      executionService: {
+        execute: vi.fn(),
       },
     };
 
@@ -572,6 +617,9 @@ describe("handleRequest", () => {
         register,
         unregister: vi.fn(),
         getScope: vi.fn(),
+      },
+      executionService: {
+        execute: vi.fn(),
       },
     };
 
@@ -622,6 +670,9 @@ describe("handleRequest", () => {
         unregister: vi.fn(),
         getScope: vi.fn(),
       },
+      executionService: {
+        execute: vi.fn(),
+      },
     };
 
     const response = await handleRequest(
@@ -661,6 +712,9 @@ describe("handleRequest", () => {
         unregister,
         getScope: vi.fn(),
       },
+      executionService: {
+        execute: vi.fn(),
+      },
     };
 
     const response = await handleRequest(
@@ -694,6 +748,9 @@ describe("handleRequest", () => {
         register: vi.fn(),
         unregister,
         getScope: vi.fn(),
+      },
+      executionService: {
+        execute: vi.fn(),
       },
     };
 
@@ -737,6 +794,9 @@ describe("handleRequest", () => {
         unregister,
         getScope: vi.fn(),
       },
+      executionService: {
+        execute: vi.fn(),
+      },
     };
 
     const response = await handleRequest(
@@ -750,6 +810,280 @@ describe("handleRequest", () => {
 
     await expect(response.json()).resolves.toEqual({
       error: "Management resource unregistration failed",
+    });
+  });
+
+  it("plans and executes desired state for POST /execute", async () => {
+    const desired: DesiredState = {
+      resources: [
+        {
+          resource: {
+            type: "worker",
+            id: "payments-api",
+          },
+          attributes: {
+            compatibilityDate: "2026-08-31",
+            script: `
+export default {
+  async fetch() {
+    return new Response("ok");
+  }
+};
+`,
+          },
+        },
+      ],
+    };
+
+    const plan: Plan = {
+      operations: [
+        {
+          action: "create",
+          resource: {
+            type: "worker",
+            id: "payments-api",
+          },
+          desired: desired.resources[0],
+          dependencies: [],
+        },
+      ],
+    };
+
+    const report = {
+      results: [
+        {
+          operation: plan.operations[0],
+          status: "succeeded" as const,
+        },
+      ],
+    };
+
+    const planning = vi.fn().mockResolvedValue(plan);
+    const execute = vi.fn().mockResolvedValue(report);
+
+    const app: App = {
+      observationService: {
+        inspect: vi.fn(),
+        getLatest: vi.fn(),
+      },
+      planningService: {
+        plan: planning,
+      },
+      managementService: {
+        register: vi.fn(),
+        unregister: vi.fn(),
+        getScope: vi.fn(),
+      },
+      executionService: {
+        execute,
+      },
+    };
+
+    const response = await handleRequest(
+      new Request("https://example.com/execute", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(desired),
+      }),
+      app,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual(report);
+
+    expect(planning).toHaveBeenCalledOnce();
+    expect(planning).toHaveBeenCalledWith(desired);
+
+    expect(execute).toHaveBeenCalledOnce();
+    expect(execute).toHaveBeenCalledWith(plan);
+  });
+
+  it("returns 400 for invalid JSON on POST /execute", async () => {
+    const planning = vi.fn();
+    const execute = vi.fn();
+
+    const app: App = {
+      observationService: {
+        inspect: vi.fn(),
+        getLatest: vi.fn(),
+      },
+      planningService: {
+        plan: planning,
+      },
+      managementService: {
+        register: vi.fn(),
+        unregister: vi.fn(),
+        getScope: vi.fn(),
+      },
+      executionService: {
+        execute,
+      },
+    };
+
+    const response = await handleRequest(
+      new Request("https://example.com/execute", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: "{invalid json",
+      }),
+      app,
+    );
+
+    expect(response.status).toBe(400);
+
+    await expect(response.json()).resolves.toEqual({
+      error: "Invalid JSON",
+    });
+
+    expect(planning).not.toHaveBeenCalled();
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 for an invalid desired state on POST /execute", async () => {
+    const planning = vi.fn();
+    const execute = vi.fn();
+
+    const app: App = {
+      observationService: {
+        inspect: vi.fn(),
+        getLatest: vi.fn(),
+      },
+      planningService: {
+        plan: planning,
+      },
+      managementService: {
+        register: vi.fn(),
+        unregister: vi.fn(),
+        getScope: vi.fn(),
+      },
+      executionService: {
+        execute,
+      },
+    };
+
+    const response = await handleRequest(
+      new Request("https://example.com/execute", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          resources: "not-an-array",
+        }),
+      }),
+      app,
+    );
+
+    expect(response.status).toBe(400);
+
+    await expect(response.json()).resolves.toEqual({
+      error: "Invalid desired state",
+      errors: [
+        {
+          path: "resources",
+          message: "resources must be an array",
+        },
+      ],
+    });
+
+    expect(planning).not.toHaveBeenCalled();
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 when executing without an observation", async () => {
+    const planning = vi.fn().mockRejectedValue(new NoObservationError());
+    const execute = vi.fn();
+
+    const app: App = {
+      observationService: {
+        inspect: vi.fn(),
+        getLatest: vi.fn(),
+      },
+      planningService: {
+        plan: planning,
+      },
+      managementService: {
+        register: vi.fn(),
+        unregister: vi.fn(),
+        getScope: vi.fn(),
+      },
+      executionService: {
+        execute,
+      },
+    };
+
+    const response = await handleRequest(
+      new Request("https://example.com/execute", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          resources: [],
+        }),
+      }),
+      app,
+    );
+
+    expect(response.status).toBe(404);
+
+    await expect(response.json()).resolves.toEqual({
+      error: "No observation available",
+    });
+
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("returns 500 when execution fails", async () => {
+    const plan: Plan = {
+      operations: [],
+    };
+
+    const planning = vi.fn().mockResolvedValue(plan);
+
+    const execute = vi
+      .fn()
+      .mockRejectedValue(new Error("sensitive internal failure"));
+
+    const app: App = {
+      observationService: {
+        inspect: vi.fn(),
+        getLatest: vi.fn(),
+      },
+      planningService: {
+        plan: planning,
+      },
+      managementService: {
+        register: vi.fn(),
+        unregister: vi.fn(),
+        getScope: vi.fn(),
+      },
+      executionService: {
+        execute,
+      },
+    };
+
+    const response = await handleRequest(
+      new Request("https://example.com/execute", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          resources: [],
+        }),
+      }),
+      app,
+    );
+
+    expect(response.status).toBe(500);
+
+    await expect(response.json()).resolves.toEqual({
+      error: "Execution failed",
     });
   });
 });

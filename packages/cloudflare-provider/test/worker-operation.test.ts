@@ -154,7 +154,10 @@ export default {
       dependencies: [],
     };
 
-    await expect(executor.execute(operation)).resolves.toBeUndefined();
+    await expect(executor.execute(operation)).resolves.toEqual({
+      operation,
+      status: "succeeded",
+    });
 
     expect(provider.deleteWorker).toHaveBeenCalledWith("payments-api");
   });

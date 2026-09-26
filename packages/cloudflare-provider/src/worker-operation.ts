@@ -1,17 +1,21 @@
-import type { PlanOperation, ResourceState } from "@cloudpilot/domain";
+import type {
+  ExecutionResult,
+  PlanOperation,
+  ResourceState,
+} from "@cloudpilot/domain";
 
 import type { CloudflareProvider } from "./provider";
 import type { CloudflareWorkerDeployment } from "./worker";
 
 export interface WorkerOperationExecutor {
-  execute(operation: PlanOperation): Promise<void>;
+  execute(operation: PlanOperation): Promise<ExecutionResult>;
 }
 
 export function createWorkerOperationExecutor(
   provider: CloudflareProvider,
 ): WorkerOperationExecutor {
   return {
-    async execute(operation: PlanOperation): Promise<void> {
+    async execute(operation: PlanOperation): Promise<ExecutionResult> {
       if (operation.resource.type !== "worker") {
         throw new Error(
           `Worker executor cannot execute resource type "${operation.resource.type}"`,
@@ -21,15 +25,24 @@ export function createWorkerOperationExecutor(
       switch (operation.action) {
         case "create":
           await executeCreate(provider, operation);
-          return;
+          return {
+            operation,
+            status: "succeeded",
+          };
 
         case "update":
           await executeUpdate(provider, operation);
-          return;
+          return {
+            operation,
+            status: "succeeded",
+          };
 
         case "delete":
           await executeDelete(provider, operation);
-          return;
+          return {
+            operation,
+            status: "succeeded",
+          };
       }
     },
   };

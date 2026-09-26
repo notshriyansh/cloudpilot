@@ -203,6 +203,183 @@ describe("createPlanExecutor", () => {
     ]);
   });
 
+  it("converts operation executor errors into failed results", async () => {
+    const failedOperation = worker("worker-1");
+    const dependentOperation = workerWithDependencies("worker-2", ["worker-1"]);
+    const independentOperation = worker("worker-3");
+
+    const execute = vi
+      .fn<OperationExecutor["execute"]>()
+      .mockImplementation(async (operation) => {
+        if (operation.resource.id === "worker-1") {
+          throw new Error("Cloudflare deployment failed");
+        }
+
+        return {
+          operation,
+          status: "succeeded",
+        };
+      });
+
+    const executor = createPlanExecutor({
+      execute,
+    });
+
+    const report = await executor.execute({
+      operations: [dependentOperation, independentOperation, failedOperation],
+    });
+
+    expect(execute).toHaveBeenCalledTimes(2);
+
+    expect(report.results).toContainEqual({
+      operation: failedOperation,
+      status: "failed",
+      error: "Cloudflare deployment failed",
+    });
+
+    expect(report.results).toContainEqual({
+      operation: dependentOperation,
+      status: "skipped",
+      error: "A dependency failed or was skipped",
+    });
+
+    expect(report.results).toContainEqual({
+      operation: independentOperation,
+      status: "succeeded",
+    });
+  });
+
+  it("converts operation executor errors into failed execution results", async () => {
+    const operation = worker("worker-1");
+
+    const execute = vi
+      .fn<OperationExecutor["execute"]>()
+      .mockRejectedValue(new Error("Provider request failed"));
+
+    const executor = createPlanExecutor({
+      execute,
+    });
+
+    const report = await executor.execute({
+      operations: [operation],
+    });
+
+    expect(execute).toHaveBeenCalledOnce();
+
+    expect(report.results).toEqual([
+      {
+        operation,
+        status: "failed",
+        error: "Provider request failed",
+      },
+    ]);
+  });
+
+  it("continues independent operations after an executor throws", async () => {
+    const failedOperation = worker("worker-1");
+    const independentOperation = worker("worker-2");
+
+    const execute = vi
+      .fn<OperationExecutor["execute"]>()
+      .mockImplementation(async (operation) => {
+        if (operation.resource.id === "worker-1") {
+          throw new Error("Provider request failed");
+        }
+
+        return {
+          operation,
+          status: "succeeded",
+        };
+      });
+
+    const executor = createPlanExecutor({
+      execute,
+    });
+
+    const report = await executor.execute({
+      operations: [failedOperation, independentOperation],
+    });
+
+    expect(execute).toHaveBeenCalledTimes(2);
+
+    expect(report.results).toEqual([
+      {
+        operation: failedOperation,
+        status: "failed",
+        error: "Provider request failed",
+      },
+      {
+        operation: independentOperation,
+        status: "succeeded",
+      },
+    ]);
+  });
+
+  it("skips dependents after an executor throws", async () => {
+    const dependency = worker("worker-1");
+    const dependent = workerWithDependencies("worker-2", ["worker-1"]);
+
+    const execute = vi
+      .fn<OperationExecutor["execute"]>()
+      .mockImplementation(async (operation) => {
+        if (operation.resource.id === "worker-1") {
+          throw new Error("Provider request failed");
+        }
+
+        return {
+          operation,
+          status: "succeeded",
+        };
+      });
+
+    const executor = createPlanExecutor({
+      execute,
+    });
+
+    const report = await executor.execute({
+      operations: [dependent, dependency],
+    });
+
+    expect(execute).toHaveBeenCalledTimes(1);
+
+    expect(report.results).toEqual([
+      {
+        operation: dependency,
+        status: "failed",
+        error: "Provider request failed",
+      },
+      {
+        operation: dependent,
+        status: "skipped",
+        error: "A dependency failed or was skipped",
+      },
+    ]);
+  });
+
+  it("stringifies non-Error executor failures", async () => {
+    const operation = worker("worker-1");
+
+    const execute = vi
+      .fn<OperationExecutor["execute"]>()
+      .mockRejectedValue("Provider request failed");
+
+    const executor = createPlanExecutor({
+      execute,
+    });
+
+    const report = await executor.execute({
+      operations: [operation],
+    });
+
+    expect(report.results).toEqual([
+      {
+        operation,
+        status: "failed",
+        error: "Provider request failed",
+      },
+    ]);
+  });
+
   it("continues executing independent operations after another operation fails", async () => {
     const failedOperation = worker("worker-1");
     const independentOperation = worker("worker-2");

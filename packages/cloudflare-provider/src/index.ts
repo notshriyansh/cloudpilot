@@ -6,3 +6,7 @@ export type { CloudflareZone } from "./zone";
 export type { CloudflareDnsRecord } from "./dns-record";
 export type { CloudflareWorker } from "./worker";
 export * from "./worker-operation";
+export {
+  createCloudflareOperationExecutor,
+  type CloudflareOperationExecutor,
+} from "./operation-executor";
