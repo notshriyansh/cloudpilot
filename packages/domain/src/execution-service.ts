@@ -18,6 +18,16 @@ export interface ExecutionService {
   execute(plan: Plan): Promise<ExecutionSummary>;
 }
 
+export type ExecutionLifecycleStatus = "running" | "succeeded" | "failed";
+
+export interface ExecutionRecord {
+  id: string;
+  startedAt: string;
+  completedAt?: string;
+  status: ExecutionLifecycleStatus;
+  summary?: ExecutionSummary;
+}
+
 export function createExecutionService(
   operationExecutor: OperationExecutor,
 ): ExecutionService {
