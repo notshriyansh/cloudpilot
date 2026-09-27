@@ -25,7 +25,7 @@ import { createManagementService, type ManagementService } from "./management";
 import { parseManagementResource } from "./management-request";
 import { parseManagementResourcePath } from "./management-resource-path";
 import { createExecutionService, type ExecutionService } from "./execution";
-import { OperationExecutor } from "@cloudpilot/domain";
+import type { OperationExecutor } from "@cloudpilot/domain";
 
 export interface App {
   observationService: ObservationService;

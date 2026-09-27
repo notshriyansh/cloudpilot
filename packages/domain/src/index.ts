@@ -42,3 +42,4 @@ export type { EvaluationContext } from "./evaluation-context";
 export { getDependents } from "./graph";
 export * from "./execution";
 export * from "./plan-executor";
+export * from "./execution-service";
