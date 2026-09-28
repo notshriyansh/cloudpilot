@@ -19,6 +19,15 @@ describe("ExecutionService", () => {
       ],
     };
 
+    const operation = {
+      action: "create" as const,
+      resource: {
+        type: "worker" as const,
+        id: "payments-api",
+      },
+      dependencies: [],
+    };
+
     const execute = vi.fn().mockResolvedValue({
       operation: plan.operations[0],
       status: "succeeded",
@@ -33,12 +42,16 @@ describe("ExecutionService", () => {
     const report = await service.execute(plan);
 
     expect(report).toEqual({
+      status: "succeeded",
       results: [
         {
-          operation: plan.operations[0],
+          operation,
           status: "succeeded",
         },
       ],
+      completed: 1,
+      failed: 0,
+      skipped: 0,
     });
 
     expect(execute).toHaveBeenCalledOnce();
@@ -112,6 +125,7 @@ describe("ExecutionService", () => {
     });
 
     expect(report).toEqual({
+      status: "failed",
       results: [
         {
           operation,
@@ -119,6 +133,9 @@ describe("ExecutionService", () => {
           error: "Cloudflare failed",
         },
       ],
+      completed: 0,
+      failed: 1,
+      skipped: 0,
     });
   });
 });

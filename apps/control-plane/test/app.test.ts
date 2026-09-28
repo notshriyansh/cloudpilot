@@ -1,10 +1,28 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Observation } from "@cloudpilot/state-store";
+import type { ExecutionStore, Observation } from "@cloudpilot/state-store";
 import { handleRequest, type App } from "../src/app";
-import type { DesiredState, Plan } from "@cloudpilot/domain";
+import type { DesiredState, ExecutionRecord, Plan } from "@cloudpilot/domain";
 import { NoObservationError } from "../src/planning";
 
 describe("handleRequest", () => {
+  function createFakeExecutionStore(): ExecutionStore {
+    const executions = new Map<string, ExecutionRecord>();
+
+    return {
+      async saveExecution(execution) {
+        executions.set(execution.id, execution);
+      },
+
+      async getExecution(id) {
+        return executions.get(id);
+      },
+
+      async getLatestExecution() {
+        return [...executions.values()].at(-1);
+      },
+    };
+  }
+
   it("returns an observation for GET /inspect", async () => {
     const observation: Observation = {
       id: "observation-1",
@@ -17,6 +35,7 @@ describe("handleRequest", () => {
     };
 
     const inspect = vi.fn().mockResolvedValue(observation);
+    const executionStore = createFakeExecutionStore();
 
     const app: App = {
       observationService: {
@@ -34,6 +53,7 @@ describe("handleRequest", () => {
       executionService: {
         execute: vi.fn(),
       },
+      executionStore,
     };
 
     const request = new Request("https://example.com/inspect");
@@ -48,6 +68,7 @@ describe("handleRequest", () => {
 
   it("returns 404 for unknown routes", async () => {
     const inspect = vi.fn();
+    const executionStore = createFakeExecutionStore();
 
     const app: App = {
       observationService: {
@@ -65,6 +86,7 @@ describe("handleRequest", () => {
       executionService: {
         execute: vi.fn(),
       },
+      executionStore,
     };
 
     const request = new Request("https://example.com/");
@@ -78,6 +100,7 @@ describe("handleRequest", () => {
 
   it("returns 404 for unsupported methods on /inspect", async () => {
     const inspect = vi.fn();
+    const executionStore = createFakeExecutionStore();
 
     const app: App = {
       observationService: {
@@ -95,6 +118,7 @@ describe("handleRequest", () => {
       executionService: {
         execute: vi.fn(),
       },
+      executionStore,
     };
 
     const request = new Request("https://example.com/inspect", {
@@ -113,6 +137,8 @@ describe("handleRequest", () => {
       .fn()
       .mockRejectedValue(new Error("sensitive internal failure"));
 
+    const executionStore = createFakeExecutionStore();
+
     const app: App = {
       observationService: {
         inspect,
@@ -129,6 +155,7 @@ describe("handleRequest", () => {
       executionService: {
         execute: vi.fn(),
       },
+      executionStore,
     };
 
     const request = new Request("https://example.com/inspect");
@@ -155,6 +182,7 @@ describe("handleRequest", () => {
     };
 
     const getLatest = vi.fn().mockResolvedValue(observation);
+    const executionStore = createFakeExecutionStore();
 
     const app: App = {
       observationService: {
@@ -172,6 +200,7 @@ describe("handleRequest", () => {
       executionService: {
         execute: vi.fn(),
       },
+      executionStore,
     };
 
     const request = new Request("https://example.com/state");
@@ -185,6 +214,7 @@ describe("handleRequest", () => {
 
   it("returns 404 when no observation exists", async () => {
     const getLatest = vi.fn().mockResolvedValue(undefined);
+    const executionStore = createFakeExecutionStore();
 
     const app: App = {
       observationService: {
@@ -202,6 +232,7 @@ describe("handleRequest", () => {
       executionService: {
         execute: vi.fn(),
       },
+      executionStore,
     };
 
     const request = new Request("https://example.com/state");
@@ -219,6 +250,8 @@ describe("handleRequest", () => {
       .fn()
       .mockRejectedValue(new Error("sensitive internal failure"));
 
+    const executionStore = createFakeExecutionStore();
+
     const app: App = {
       observationService: {
         inspect: vi.fn(),
@@ -235,6 +268,7 @@ describe("handleRequest", () => {
       executionService: {
         execute: vi.fn(),
       },
+      executionStore,
     };
 
     const request = new Request("https://example.com/state");
@@ -277,6 +311,7 @@ describe("handleRequest", () => {
     };
 
     const planning = vi.fn().mockResolvedValue(plan);
+    const executionStore = createFakeExecutionStore();
 
     const app: App = {
       observationService: {
@@ -294,6 +329,7 @@ describe("handleRequest", () => {
       executionService: {
         execute: vi.fn(),
       },
+      executionStore,
     };
 
     const request = new Request("https://example.com/plan", {
@@ -315,6 +351,7 @@ describe("handleRequest", () => {
 
   it("returns 400 for invalid JSON on POST /plan", async () => {
     const planning = vi.fn();
+    const executionStore = createFakeExecutionStore();
 
     const app: App = {
       observationService: {
@@ -332,6 +369,7 @@ describe("handleRequest", () => {
       executionService: {
         execute: vi.fn(),
       },
+      executionStore,
     };
 
     const request = new Request("https://example.com/plan", {
@@ -353,6 +391,7 @@ describe("handleRequest", () => {
 
   it("returns 400 for an invalid desired state", async () => {
     const planning = vi.fn();
+    const executionStore = createFakeExecutionStore();
 
     const app: App = {
       observationService: {
@@ -370,6 +409,7 @@ describe("handleRequest", () => {
       executionService: {
         execute: vi.fn(),
       },
+      executionStore,
     };
 
     const request = new Request("https://example.com/plan", {
@@ -399,6 +439,7 @@ describe("handleRequest", () => {
 
   it("returns 404 when planning has no observation", async () => {
     const planning = vi.fn().mockRejectedValue(new NoObservationError());
+    const executionStore = createFakeExecutionStore();
 
     const app: App = {
       observationService: {
@@ -416,6 +457,7 @@ describe("handleRequest", () => {
       executionService: {
         execute: vi.fn(),
       },
+      executionStore,
     };
 
     const request = new Request("https://example.com/plan", {
@@ -441,6 +483,8 @@ describe("handleRequest", () => {
       .fn()
       .mockRejectedValue(new Error("sensitive internal failure"));
 
+    const executionStore = createFakeExecutionStore();
+
     const app: App = {
       observationService: {
         inspect: vi.fn(),
@@ -457,6 +501,7 @@ describe("handleRequest", () => {
       executionService: {
         execute: vi.fn(),
       },
+      executionStore,
     };
 
     const request = new Request("https://example.com/plan", {
@@ -493,6 +538,8 @@ describe("handleRequest", () => {
       getScope: vi.fn().mockResolvedValue(scope),
     };
 
+    const executionStore = createFakeExecutionStore();
+
     const app: App = {
       observationService: {
         inspect: vi.fn(),
@@ -505,6 +552,7 @@ describe("handleRequest", () => {
       executionService: {
         execute: vi.fn(),
       },
+      executionStore,
     };
 
     const response = await handleRequest(
@@ -526,6 +574,8 @@ describe("handleRequest", () => {
         .mockRejectedValue(new Error("sensitive internal failure")),
     };
 
+    const executionStore = createFakeExecutionStore();
+
     const app: App = {
       observationService: {
         inspect: vi.fn(),
@@ -538,6 +588,7 @@ describe("handleRequest", () => {
       executionService: {
         execute: vi.fn(),
       },
+      executionStore,
     };
 
     const response = await handleRequest(
@@ -554,6 +605,7 @@ describe("handleRequest", () => {
 
   it("registers a managed resource", async () => {
     const register = vi.fn().mockResolvedValue(undefined);
+    const executionStore = createFakeExecutionStore();
 
     const app: App = {
       observationService: {
@@ -571,6 +623,7 @@ describe("handleRequest", () => {
       executionService: {
         execute: vi.fn(),
       },
+      executionStore,
     };
 
     const response = await handleRequest(
@@ -604,6 +657,7 @@ describe("handleRequest", () => {
 
   it("returns 400 for an invalid managed resource", async () => {
     const register = vi.fn();
+    const executionStore = createFakeExecutionStore();
 
     const app: App = {
       observationService: {
@@ -621,6 +675,7 @@ describe("handleRequest", () => {
       executionService: {
         execute: vi.fn(),
       },
+      executionStore,
     };
 
     const response = await handleRequest(
@@ -657,6 +712,8 @@ describe("handleRequest", () => {
       .fn()
       .mockRejectedValue(new Error("sensitive internal failure"));
 
+    const executionStore = createFakeExecutionStore();
+
     const app: App = {
       observationService: {
         inspect: vi.fn(),
@@ -673,6 +730,7 @@ describe("handleRequest", () => {
       executionService: {
         execute: vi.fn(),
       },
+      executionStore,
     };
 
     const response = await handleRequest(
@@ -698,6 +756,7 @@ describe("handleRequest", () => {
 
   it("unregisters a managed resource", async () => {
     const unregister = vi.fn().mockResolvedValue(undefined);
+    const executionStore = createFakeExecutionStore();
 
     const app: App = {
       observationService: {
@@ -715,6 +774,7 @@ describe("handleRequest", () => {
       executionService: {
         execute: vi.fn(),
       },
+      executionStore,
     };
 
     const response = await handleRequest(
@@ -735,6 +795,7 @@ describe("handleRequest", () => {
 
   it("returns 400 for an invalid managed resource path", async () => {
     const unregister = vi.fn();
+    const executionStore = createFakeExecutionStore();
 
     const app: App = {
       observationService: {
@@ -752,6 +813,7 @@ describe("handleRequest", () => {
       executionService: {
         execute: vi.fn(),
       },
+      executionStore,
     };
 
     const response = await handleRequest(
@@ -781,6 +843,8 @@ describe("handleRequest", () => {
       .fn()
       .mockRejectedValue(new Error("sensitive internal failure"));
 
+    const executionStore = createFakeExecutionStore();
+
     const app: App = {
       observationService: {
         inspect: vi.fn(),
@@ -797,6 +861,7 @@ describe("handleRequest", () => {
       executionService: {
         execute: vi.fn(),
       },
+      executionStore,
     };
 
     const response = await handleRequest(
@@ -860,6 +925,7 @@ export default {
 
     const planning = vi.fn().mockResolvedValue(plan);
     const execute = vi.fn().mockResolvedValue(report);
+    const executionStore = createFakeExecutionStore();
 
     const app: App = {
       observationService: {
@@ -877,6 +943,7 @@ export default {
       executionService: {
         execute,
       },
+      executionStore,
     };
 
     const response = await handleRequest(
@@ -891,7 +958,18 @@ export default {
     );
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual(report);
+
+    const body = (await response.json()) as {
+      executionId: string;
+      results: typeof report.results;
+    };
+
+    expect(body).toEqual({
+      ...report,
+      executionId: expect.any(String),
+    });
+
+    expect(body.executionId).toEqual(expect.any(String));
 
     expect(planning).toHaveBeenCalledOnce();
     expect(planning).toHaveBeenCalledWith(desired);
@@ -903,6 +981,7 @@ export default {
   it("returns 400 for invalid JSON on POST /execute", async () => {
     const planning = vi.fn();
     const execute = vi.fn();
+    const executionStore = createFakeExecutionStore();
 
     const app: App = {
       observationService: {
@@ -920,6 +999,7 @@ export default {
       executionService: {
         execute,
       },
+      executionStore,
     };
 
     const response = await handleRequest(
@@ -946,6 +1026,7 @@ export default {
   it("returns 400 for an invalid desired state on POST /execute", async () => {
     const planning = vi.fn();
     const execute = vi.fn();
+    const executionStore = createFakeExecutionStore();
 
     const app: App = {
       observationService: {
@@ -963,6 +1044,7 @@ export default {
       executionService: {
         execute,
       },
+      executionStore,
     };
 
     const response = await handleRequest(
@@ -997,6 +1079,7 @@ export default {
   it("returns 404 when executing without an observation", async () => {
     const planning = vi.fn().mockRejectedValue(new NoObservationError());
     const execute = vi.fn();
+    const executionStore = createFakeExecutionStore();
 
     const app: App = {
       observationService: {
@@ -1014,6 +1097,7 @@ export default {
       executionService: {
         execute,
       },
+      executionStore,
     };
 
     const response = await handleRequest(
@@ -1049,6 +1133,8 @@ export default {
       .fn()
       .mockRejectedValue(new Error("sensitive internal failure"));
 
+    const executionStore = createFakeExecutionStore();
+
     const app: App = {
       observationService: {
         inspect: vi.fn(),
@@ -1065,6 +1151,7 @@ export default {
       executionService: {
         execute,
       },
+      executionStore,
     };
 
     const response = await handleRequest(

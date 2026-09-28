@@ -4,3 +4,4 @@ export { createD1ManagementScopeStore } from "./d1-management-scope-store";
 export type { ManagementScopeStore } from "./management-scope-store";
 export type { ExecutionStore } from "./execution-store";
 export { createMemoryExecutionStore } from "./memory-execution-store";
+export { createD1ExecutionStore } from "./d1-execution-store";

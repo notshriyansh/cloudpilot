@@ -1,5 +1,5 @@
 import type { ExecutionResult, OperationExecutor } from "./execution";
-import { Plan } from "./plan";
+import type { Plan } from "./plan";
 import { createPlanExecutor } from "./plan-executor";
 
 export interface ExecutionSummary {
@@ -14,10 +14,6 @@ export interface ExecutionSummary {
   skipped: number;
 }
 
-export interface ExecutionService {
-  execute(plan: Plan): Promise<ExecutionSummary>;
-}
-
 export type ExecutionLifecycleStatus = "running" | "succeeded" | "failed";
 
 export interface ExecutionRecord {
@@ -26,6 +22,10 @@ export interface ExecutionRecord {
   completedAt?: string;
   status: ExecutionLifecycleStatus;
   summary?: ExecutionSummary;
+}
+
+export interface ExecutionService {
+  execute(plan: Plan): Promise<ExecutionSummary>;
 }
 
 export function createExecutionService(

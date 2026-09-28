@@ -1,128 +1,114 @@
 import { describe, expect, it } from "vitest";
 
-import type { Observation, StateStore } from "../src";
+import type { ExecutionStore } from "../src";
+import { ExecutionRecord } from "@cloudpilot/domain";
 
-function createObservation(overrides: Partial<Observation> = {}): Observation {
+function createExecutionRecord(
+  overrides: Partial<ExecutionRecord> = {},
+): ExecutionRecord {
   return {
     id: "execution-1",
     startedAt: "2026-09-27T10:00:00.000Z",
-    completedAt: "2026-09-27T10:00:05.000Z",
-    status: "completed",
-    state: {
-      resources: [
-        {
-          resource: {
-            type: "worker",
-            id: "api",
-          },
-          attributes: {
-            compatibilityDate: "2026-08-31",
-          },
-        },
-      ],
-    },
+    status: "running",
     ...overrides,
   };
 }
 
-function createInMemoryStateStore(): StateStore {
-  const observations: Observation[] = [];
+function createInMemoryExecutionStore(): ExecutionStore {
+  const executions: ExecutionRecord[] = [];
 
   return {
-    async saveObservation(observation) {
-      observations.push(observation);
+    async saveExecution(execution) {
+      const existingIndex = executions.findIndex(
+        (candidate) => candidate.id === execution.id,
+      );
+
+      if (existingIndex === -1) {
+        executions.push(execution);
+      } else {
+        executions[existingIndex] = execution;
+      }
     },
 
-    async getLatestObservation() {
-      return observations.at(-1);
+    async getExecution(id) {
+      return executions.find((execution) => execution.id === id);
+    },
+
+    async getLatestExecution() {
+      return executions.at(-1);
     },
   };
 }
 
-describe("StateStore execution observations", () => {
-  it("saves and retrieves an observation", async () => {
-    const store = createInMemoryStateStore();
-    const observation = createObservation();
+describe("ExecutionStore", () => {
+  it("saves and retrieves an execution", async () => {
+    const store = createInMemoryExecutionStore();
 
-    await store.saveObservation(observation);
+    const execution = createExecutionRecord();
 
-    await expect(store.getLatestObservation()).resolves.toEqual(observation);
+    await store.saveExecution(execution);
+
+    await expect(store.getExecution(execution.id)).resolves.toEqual(execution);
   });
 
-  it("returns undefined when no observations exist", async () => {
-    const store = createInMemoryStateStore();
+  it("returns undefined when execution does not exist", async () => {
+    const store = createInMemoryExecutionStore();
 
-    await expect(store.getLatestObservation()).resolves.toBeUndefined();
+    await expect(store.getExecution("missing")).resolves.toBeUndefined();
   });
 
-  it("returns the latest observation", async () => {
-    const store = createInMemoryStateStore();
+  it("updates an existing execution record", async () => {
+    const store = createInMemoryExecutionStore();
 
-    const first = createObservation({
-      id: "execution-1",
-      completedAt: "2026-09-27T10:00:05.000Z",
+    const running = createExecutionRecord({
+      status: "running",
     });
 
-    const second = createObservation({
+    const completed: ExecutionRecord = {
+      ...running,
+      completedAt: "2026-09-27T10:00:05.000Z",
+      status: "succeeded",
+    };
+
+    await store.saveExecution(running);
+    await store.saveExecution(completed);
+
+    await expect(store.getExecution(running.id)).resolves.toEqual(completed);
+  });
+
+  it("returns the latest execution", async () => {
+    const store = createInMemoryExecutionStore();
+
+    const first = createExecutionRecord({
+      id: "execution-1",
+      startedAt: "2026-09-27T10:00:00.000Z",
+    });
+
+    const second = createExecutionRecord({
       id: "execution-2",
       startedAt: "2026-09-27T11:00:00.000Z",
-      completedAt: "2026-09-27T11:00:05.000Z",
     });
 
-    await store.saveObservation(first);
-    await store.saveObservation(second);
+    await store.saveExecution(first);
+    await store.saveExecution(second);
 
-    await expect(store.getLatestObservation()).resolves.toEqual(second);
+    await expect(store.getLatestExecution()).resolves.toEqual(second);
   });
 
-  it("preserves failed observations", async () => {
-    const store = createInMemoryStateStore();
+  it("preserves failed executions", async () => {
+    const store = createInMemoryExecutionStore();
 
-    const observation = createObservation({
+    const execution = createExecutionRecord({
       id: "execution-failed",
+      completedAt: "2026-09-27T10:00:05.000Z",
       status: "failed",
     });
 
-    await store.saveObservation(observation);
+    await store.saveExecution(execution);
 
-    const result = await store.getLatestObservation();
+    const result = await store.getExecution(execution.id);
 
-    expect(result).toEqual(observation);
+    expect(result).toEqual(execution);
     expect(result?.status).toBe("failed");
-  });
-
-  it("preserves the observed state associated with an observation", async () => {
-    const store = createInMemoryStateStore();
-
-    const observation = createObservation({
-      state: {
-        resources: [
-          {
-            resource: {
-              type: "zone",
-              id: "example.com",
-            },
-            attributes: {
-              name: "example.com",
-            },
-          },
-          {
-            resource: {
-              type: "worker",
-              id: "api",
-            },
-            attributes: {
-              compatibilityDate: "2026-08-31",
-            },
-          },
-        ],
-      },
-    });
-
-    await store.saveObservation(observation);
-
-    const result = await store.getLatestObservation();
-
-    expect(result?.state).toEqual(observation.state);
   });
 });

@@ -17,9 +17,11 @@ import {
 import { parseDesiredState } from "./desired-state";
 import {
   createD1ManagementScopeStore,
+  createD1ExecutionStore,
   createD1StateStore,
   type ManagementScopeStore,
   type StateStore,
+  ExecutionStore,
 } from "@cloudpilot/state-store";
 import { createManagementService, type ManagementService } from "./management";
 import { parseManagementResource } from "./management-request";
@@ -32,11 +34,13 @@ export interface App {
   planningService: PlanningService;
   managementService: ManagementService;
   executionService: ExecutionService;
+  executionStore: ExecutionStore;
 }
 
 export interface AppDependencies {
   inventory: Inventory;
   stateStore: StateStore;
+  executionStore: ExecutionStore;
   clock: Clock;
   idGenerator: IdGenerator;
   managementScopeStore: ManagementScopeStore;
@@ -69,6 +73,7 @@ export function createApp(dependencies: AppDependencies): App {
     planningService,
     managementService,
     executionService,
+    executionStore: dependencies.executionStore,
   };
 }
 
@@ -82,12 +87,14 @@ export function createProductionApp(env: Env) {
 
   const inventory = createInventory(provider);
   const stateStore = createD1StateStore(env.cloudpilot);
+  const executionStore = createD1ExecutionStore(env.cloudpilot);
 
   const managementScopeStore = createD1ManagementScopeStore(env.cloudpilot);
 
   return createApp({
     inventory,
     stateStore,
+    executionStore,
     clock: {
       now: () => new Date(),
     },
@@ -378,9 +385,46 @@ export async function handleRequest(
 
     try {
       const plan = await app.planningService.plan(result.state!);
-      const report = await app.executionService.execute(plan);
 
-      return Response.json(report);
+      const executionId = crypto.randomUUID();
+      const startedAt = new Date().toISOString();
+
+      await app.executionStore.saveExecution({
+        id: executionId,
+        startedAt,
+        status: "running",
+      });
+
+      try {
+        const summary = await app.executionService.execute(plan);
+        const completedAt = new Date().toISOString();
+
+        const execution = {
+          id: executionId,
+          startedAt,
+          completedAt,
+          status: summary.status,
+          summary,
+        } as const;
+
+        await app.executionStore.saveExecution(execution);
+
+        return Response.json({
+          executionId,
+          ...summary,
+        });
+      } catch (executionError) {
+        const completedAt = new Date().toISOString();
+
+        await app.executionStore.saveExecution({
+          id: executionId,
+          startedAt,
+          completedAt,
+          status: "failed",
+        });
+
+        throw executionError;
+      }
     } catch (error) {
       if (error instanceof NoObservationError) {
         return Response.json(

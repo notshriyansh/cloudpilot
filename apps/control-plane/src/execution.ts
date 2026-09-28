@@ -1,24 +1,7 @@
-import type {
-  ExecutionReport,
-  OperationExecutor,
-  Plan,
-  PlanExecutor,
+export {
+  createExecutionService,
+  type ExecutionService,
+  type ExecutionRecord,
+  type ExecutionLifecycleStatus,
+  type ExecutionSummary,
 } from "@cloudpilot/domain";
-
-import { createPlanExecutor } from "@cloudpilot/domain";
-
-export interface ExecutionService {
-  execute(plan: Plan): Promise<ExecutionReport>;
-}
-
-export function createExecutionService(
-  operationExecutor: OperationExecutor,
-): ExecutionService {
-  const planExecutor: PlanExecutor = createPlanExecutor(operationExecutor);
-
-  return {
-    async execute(plan: Plan): Promise<ExecutionReport> {
-      return planExecutor.execute(plan);
-    },
-  };
-}
