@@ -1,28 +1,81 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ExecutionStore, Observation } from "@cloudpilot/state-store";
 import { handleRequest, type App } from "../src/app";
-import type { DesiredState, ExecutionRecord, Plan } from "@cloudpilot/domain";
+import type {
+  DesiredState,
+  ExecutionRecord,
+  Plan,
+  PlanEvaluator,
+} from "@cloudpilot/domain";
 import { NoObservationError } from "../src/planning";
+import type { EvaluationService } from "../src/evaluation";
+
+function createFakeExecutionStore(): ExecutionStore {
+  const executions = new Map<string, ExecutionRecord>();
+
+  return {
+    async saveExecution(execution) {
+      executions.set(execution.id, execution);
+    },
+
+    async getExecution(id) {
+      return executions.get(id);
+    },
+
+    async getLatestExecution() {
+      return [...executions.values()].at(-1);
+    },
+  };
+}
+
+function createFakePlanEvaluator(): PlanEvaluator {
+  return {
+    evaluate: vi.fn().mockReturnValue({
+      operations: [],
+    }),
+  };
+}
+
+function createFakeEvaluationService(): EvaluationService {
+  return {
+    evaluate: vi.fn().mockResolvedValue({
+      operations: [],
+    }),
+  };
+}
+
+function createApp(overrides: Partial<App> = {}): App {
+  return {
+    observationService: {
+      inspect: vi.fn(),
+      getLatest: vi.fn(),
+    },
+
+    planningService: {
+      plan: vi.fn(),
+    },
+
+    managementService: {
+      register: vi.fn(),
+      unregister: vi.fn(),
+      getScope: vi.fn(),
+    },
+
+    executionService: {
+      execute: vi.fn(),
+    },
+
+    executionStore: createFakeExecutionStore(),
+
+    planEvaluator: createFakePlanEvaluator(),
+
+    evaluationService: createFakeEvaluationService(),
+
+    ...overrides,
+  };
+}
 
 describe("handleRequest", () => {
-  function createFakeExecutionStore(): ExecutionStore {
-    const executions = new Map<string, ExecutionRecord>();
-
-    return {
-      async saveExecution(execution) {
-        executions.set(execution.id, execution);
-      },
-
-      async getExecution(id) {
-        return executions.get(id);
-      },
-
-      async getLatestExecution() {
-        return [...executions.values()].at(-1);
-      },
-    };
-  }
-
   it("returns an observation for GET /inspect", async () => {
     const observation: Observation = {
       id: "observation-1",
@@ -37,24 +90,13 @@ describe("handleRequest", () => {
     const inspect = vi.fn().mockResolvedValue(observation);
     const executionStore = createFakeExecutionStore();
 
-    const app: App = {
+    const app = createApp({
       observationService: {
         inspect,
         getLatest: vi.fn(),
       },
-      planningService: {
-        plan: vi.fn(),
-      },
-      managementService: {
-        register: vi.fn(),
-        unregister: vi.fn(),
-        getScope: vi.fn(),
-      },
-      executionService: {
-        execute: vi.fn(),
-      },
       executionStore,
-    };
+    });
 
     const request = new Request("https://example.com/inspect");
 
@@ -70,24 +112,13 @@ describe("handleRequest", () => {
     const inspect = vi.fn();
     const executionStore = createFakeExecutionStore();
 
-    const app: App = {
+    const app = createApp({
       observationService: {
         inspect,
         getLatest: vi.fn(),
       },
-      planningService: {
-        plan: vi.fn(),
-      },
-      managementService: {
-        register: vi.fn(),
-        unregister: vi.fn(),
-        getScope: vi.fn(),
-      },
-      executionService: {
-        execute: vi.fn(),
-      },
       executionStore,
-    };
+    });
 
     const request = new Request("https://example.com/");
 
@@ -102,24 +133,13 @@ describe("handleRequest", () => {
     const inspect = vi.fn();
     const executionStore = createFakeExecutionStore();
 
-    const app: App = {
+    const app = createApp({
       observationService: {
         inspect,
         getLatest: vi.fn(),
       },
-      planningService: {
-        plan: vi.fn(),
-      },
-      managementService: {
-        register: vi.fn(),
-        unregister: vi.fn(),
-        getScope: vi.fn(),
-      },
-      executionService: {
-        execute: vi.fn(),
-      },
       executionStore,
-    };
+    });
 
     const request = new Request("https://example.com/inspect", {
       method: "POST",
@@ -139,24 +159,13 @@ describe("handleRequest", () => {
 
     const executionStore = createFakeExecutionStore();
 
-    const app: App = {
+    const app = createApp({
       observationService: {
         inspect,
         getLatest: vi.fn(),
       },
-      planningService: {
-        plan: vi.fn(),
-      },
-      managementService: {
-        register: vi.fn(),
-        unregister: vi.fn(),
-        getScope: vi.fn(),
-      },
-      executionService: {
-        execute: vi.fn(),
-      },
       executionStore,
-    };
+    });
 
     const request = new Request("https://example.com/inspect");
 
@@ -183,25 +192,15 @@ describe("handleRequest", () => {
 
     const getLatest = vi.fn().mockResolvedValue(observation);
     const executionStore = createFakeExecutionStore();
+    const inspect = vi.fn().mockResolvedValue(observation);
 
-    const app: App = {
+    const app = createApp({
       observationService: {
-        inspect: vi.fn(),
+        inspect,
         getLatest,
       },
-      planningService: {
-        plan: vi.fn(),
-      },
-      managementService: {
-        register: vi.fn(),
-        unregister: vi.fn(),
-        getScope: vi.fn(),
-      },
-      executionService: {
-        execute: vi.fn(),
-      },
       executionStore,
-    };
+    });
 
     const request = new Request("https://example.com/state");
 
@@ -215,25 +214,15 @@ describe("handleRequest", () => {
   it("returns 404 when no observation exists", async () => {
     const getLatest = vi.fn().mockResolvedValue(undefined);
     const executionStore = createFakeExecutionStore();
+    const inspect = vi.fn();
 
-    const app: App = {
+    const app = createApp({
       observationService: {
-        inspect: vi.fn(),
+        inspect,
         getLatest,
       },
-      planningService: {
-        plan: vi.fn(),
-      },
-      managementService: {
-        register: vi.fn(),
-        unregister: vi.fn(),
-        getScope: vi.fn(),
-      },
-      executionService: {
-        execute: vi.fn(),
-      },
       executionStore,
-    };
+    });
 
     const request = new Request("https://example.com/state");
 
@@ -250,26 +239,16 @@ describe("handleRequest", () => {
       .fn()
       .mockRejectedValue(new Error("sensitive internal failure"));
 
+    const inspect = vi.fn();
     const executionStore = createFakeExecutionStore();
 
-    const app: App = {
+    const app = createApp({
       observationService: {
-        inspect: vi.fn(),
+        inspect,
         getLatest,
       },
-      planningService: {
-        plan: vi.fn(),
-      },
-      managementService: {
-        register: vi.fn(),
-        unregister: vi.fn(),
-        getScope: vi.fn(),
-      },
-      executionService: {
-        execute: vi.fn(),
-      },
       executionStore,
-    };
+    });
 
     const request = new Request("https://example.com/state");
 
@@ -313,7 +292,7 @@ describe("handleRequest", () => {
     const planning = vi.fn().mockResolvedValue(plan);
     const executionStore = createFakeExecutionStore();
 
-    const app: App = {
+    const app = createApp({
       observationService: {
         inspect: vi.fn(),
         getLatest: vi.fn(),
@@ -321,16 +300,8 @@ describe("handleRequest", () => {
       planningService: {
         plan: planning,
       },
-      managementService: {
-        register: vi.fn(),
-        unregister: vi.fn(),
-        getScope: vi.fn(),
-      },
-      executionService: {
-        execute: vi.fn(),
-      },
       executionStore,
-    };
+    });
 
     const request = new Request("https://example.com/plan", {
       method: "POST",
@@ -353,7 +324,7 @@ describe("handleRequest", () => {
     const planning = vi.fn();
     const executionStore = createFakeExecutionStore();
 
-    const app: App = {
+    const app = createApp({
       observationService: {
         inspect: vi.fn(),
         getLatest: vi.fn(),
@@ -361,16 +332,8 @@ describe("handleRequest", () => {
       planningService: {
         plan: planning,
       },
-      managementService: {
-        register: vi.fn(),
-        unregister: vi.fn(),
-        getScope: vi.fn(),
-      },
-      executionService: {
-        execute: vi.fn(),
-      },
       executionStore,
-    };
+    });
 
     const request = new Request("https://example.com/plan", {
       method: "POST",
@@ -393,7 +356,7 @@ describe("handleRequest", () => {
     const planning = vi.fn();
     const executionStore = createFakeExecutionStore();
 
-    const app: App = {
+    const app = createApp({
       observationService: {
         inspect: vi.fn(),
         getLatest: vi.fn(),
@@ -401,16 +364,8 @@ describe("handleRequest", () => {
       planningService: {
         plan: planning,
       },
-      managementService: {
-        register: vi.fn(),
-        unregister: vi.fn(),
-        getScope: vi.fn(),
-      },
-      executionService: {
-        execute: vi.fn(),
-      },
       executionStore,
-    };
+    });
 
     const request = new Request("https://example.com/plan", {
       method: "POST",
@@ -441,7 +396,7 @@ describe("handleRequest", () => {
     const planning = vi.fn().mockRejectedValue(new NoObservationError());
     const executionStore = createFakeExecutionStore();
 
-    const app: App = {
+    const app = createApp({
       observationService: {
         inspect: vi.fn(),
         getLatest: vi.fn(),
@@ -449,16 +404,8 @@ describe("handleRequest", () => {
       planningService: {
         plan: planning,
       },
-      managementService: {
-        register: vi.fn(),
-        unregister: vi.fn(),
-        getScope: vi.fn(),
-      },
-      executionService: {
-        execute: vi.fn(),
-      },
       executionStore,
-    };
+    });
 
     const request = new Request("https://example.com/plan", {
       method: "POST",
@@ -485,7 +432,7 @@ describe("handleRequest", () => {
 
     const executionStore = createFakeExecutionStore();
 
-    const app: App = {
+    const app = createApp({
       observationService: {
         inspect: vi.fn(),
         getLatest: vi.fn(),
@@ -493,16 +440,8 @@ describe("handleRequest", () => {
       planningService: {
         plan: planning,
       },
-      managementService: {
-        register: vi.fn(),
-        unregister: vi.fn(),
-        getScope: vi.fn(),
-      },
-      executionService: {
-        execute: vi.fn(),
-      },
       executionStore,
-    };
+    });
 
     const request = new Request("https://example.com/plan", {
       method: "POST",
@@ -540,20 +479,14 @@ describe("handleRequest", () => {
 
     const executionStore = createFakeExecutionStore();
 
-    const app: App = {
+    const app = createApp({
       observationService: {
         inspect: vi.fn(),
         getLatest: vi.fn(),
       },
-      planningService: {
-        plan: vi.fn(),
-      },
       managementService,
-      executionService: {
-        execute: vi.fn(),
-      },
       executionStore,
-    };
+    });
 
     const response = await handleRequest(
       new Request("http://localhost/managed-resources"),
@@ -576,20 +509,14 @@ describe("handleRequest", () => {
 
     const executionStore = createFakeExecutionStore();
 
-    const app: App = {
+    const app = createApp({
       observationService: {
         inspect: vi.fn(),
         getLatest: vi.fn(),
       },
-      planningService: {
-        plan: vi.fn(),
-      },
       managementService,
-      executionService: {
-        execute: vi.fn(),
-      },
       executionStore,
-    };
+    });
 
     const response = await handleRequest(
       new Request("http://localhost/managed-resources"),
@@ -606,25 +533,20 @@ describe("handleRequest", () => {
   it("registers a managed resource", async () => {
     const register = vi.fn().mockResolvedValue(undefined);
     const executionStore = createFakeExecutionStore();
+    const managementService = {
+      register,
+      unregister: vi.fn(),
+      getScope: vi.fn(),
+    };
 
-    const app: App = {
+    const app = createApp({
       observationService: {
         inspect: vi.fn(),
         getLatest: vi.fn(),
       },
-      planningService: {
-        plan: vi.fn(),
-      },
-      managementService: {
-        register,
-        unregister: vi.fn(),
-        getScope: vi.fn(),
-      },
-      executionService: {
-        execute: vi.fn(),
-      },
+      managementService,
       executionStore,
-    };
+    });
 
     const response = await handleRequest(
       new Request("http://localhost/managed-resources", {
@@ -656,27 +578,25 @@ describe("handleRequest", () => {
   });
 
   it("returns 400 for an invalid managed resource", async () => {
-    const register = vi.fn();
     const executionStore = createFakeExecutionStore();
+    const register = vi
+      .fn()
+      .mockRejectedValue(new Error("sensitive internal failure"));
 
-    const app: App = {
+    const managementService = {
+      register,
+      unregister: vi.fn(),
+      getScope: vi.fn(),
+    };
+
+    const app = createApp({
       observationService: {
         inspect: vi.fn(),
         getLatest: vi.fn(),
       },
-      planningService: {
-        plan: vi.fn(),
-      },
-      managementService: {
-        register,
-        unregister: vi.fn(),
-        getScope: vi.fn(),
-      },
-      executionService: {
-        execute: vi.fn(),
-      },
+      managementService,
       executionStore,
-    };
+    });
 
     const response = await handleRequest(
       new Request("http://localhost/managed-resources", {
@@ -714,24 +634,18 @@ describe("handleRequest", () => {
 
     const executionStore = createFakeExecutionStore();
 
-    const app: App = {
+    const app = createApp({
       observationService: {
         inspect: vi.fn(),
         getLatest: vi.fn(),
-      },
-      planningService: {
-        plan: vi.fn(),
       },
       managementService: {
         register,
         unregister: vi.fn(),
         getScope: vi.fn(),
       },
-      executionService: {
-        execute: vi.fn(),
-      },
       executionStore,
-    };
+    });
 
     const response = await handleRequest(
       new Request("http://localhost/managed-resources", {
@@ -757,25 +671,20 @@ describe("handleRequest", () => {
   it("unregisters a managed resource", async () => {
     const unregister = vi.fn().mockResolvedValue(undefined);
     const executionStore = createFakeExecutionStore();
+    const managementService = {
+      register: vi.fn(),
+      unregister,
+      getScope: vi.fn(),
+    };
 
-    const app: App = {
+    const app = createApp({
       observationService: {
         inspect: vi.fn(),
         getLatest: vi.fn(),
       },
-      planningService: {
-        plan: vi.fn(),
-      },
-      managementService: {
-        register: vi.fn(),
-        unregister,
-        getScope: vi.fn(),
-      },
-      executionService: {
-        execute: vi.fn(),
-      },
+      managementService,
       executionStore,
-    };
+    });
 
     const response = await handleRequest(
       new Request("http://localhost/managed-resources/worker/fluxion-api", {
@@ -794,27 +703,25 @@ describe("handleRequest", () => {
   });
 
   it("returns 400 for an invalid managed resource path", async () => {
-    const unregister = vi.fn();
     const executionStore = createFakeExecutionStore();
+    const unregister = vi
+      .fn()
+      .mockRejectedValue(new Error("sensitive internal failure"));
 
-    const app: App = {
+    const managementService = {
+      register: vi.fn(),
+      unregister,
+      getScope: vi.fn(),
+    };
+
+    const app = createApp({
       observationService: {
         inspect: vi.fn(),
         getLatest: vi.fn(),
       },
-      planningService: {
-        plan: vi.fn(),
-      },
-      managementService: {
-        register: vi.fn(),
-        unregister,
-        getScope: vi.fn(),
-      },
-      executionService: {
-        execute: vi.fn(),
-      },
+      managementService,
       executionStore,
-    };
+    });
 
     const response = await handleRequest(
       new Request("http://localhost/managed-resources/r2_bucket/bucket", {
@@ -845,24 +752,18 @@ describe("handleRequest", () => {
 
     const executionStore = createFakeExecutionStore();
 
-    const app: App = {
+    const app = createApp({
       observationService: {
         inspect: vi.fn(),
         getLatest: vi.fn(),
-      },
-      planningService: {
-        plan: vi.fn(),
       },
       managementService: {
         register: vi.fn(),
         unregister,
         getScope: vi.fn(),
       },
-      executionService: {
-        execute: vi.fn(),
-      },
       executionStore,
-    };
+    });
 
     const response = await handleRequest(
       new Request("http://localhost/managed-resources/worker/fluxion-api", {
@@ -924,10 +825,44 @@ export default {
     };
 
     const planning = vi.fn().mockResolvedValue(plan);
-    const execute = vi.fn().mockResolvedValue(report);
+
+    const execute = vi.fn().mockResolvedValue({
+      status: "succeeded" as const,
+      results: [
+        {
+          operation: plan.operations[0],
+          status: "succeeded" as const,
+        },
+      ],
+      completed: 1,
+      failed: 0,
+      skipped: 0,
+    });
+
+    const evaluate = vi.fn().mockResolvedValue({
+      operations: [
+        {
+          operation: plan.operations[0],
+          policy: {
+            action: "allow",
+            reason: "Operation is permitted",
+          },
+          risk: {
+            level: "low",
+            reason: "Low risk operation",
+          },
+          approval: {
+            requirement: "none",
+            reason: "No approval required",
+          },
+          readiness: "ready",
+        },
+      ],
+    });
+
     const executionStore = createFakeExecutionStore();
 
-    const app: App = {
+    const app = createApp({
       observationService: {
         inspect: vi.fn(),
         getLatest: vi.fn(),
@@ -935,16 +870,14 @@ export default {
       planningService: {
         plan: planning,
       },
-      managementService: {
-        register: vi.fn(),
-        unregister: vi.fn(),
-        getScope: vi.fn(),
-      },
       executionService: {
         execute,
       },
+      evaluationService: {
+        evaluate,
+      },
       executionStore,
-    };
+    });
 
     const response = await handleRequest(
       new Request("https://example.com/execute", {
@@ -961,15 +894,26 @@ export default {
 
     const body = (await response.json()) as {
       executionId: string;
-      results: typeof report.results;
+      status: string;
+      results: unknown[];
     };
 
     expect(body).toEqual({
-      ...report,
       executionId: expect.any(String),
+      status: "succeeded",
+      results: [
+        {
+          operation: plan.operations[0],
+          status: "succeeded",
+        },
+      ],
+      completed: 1,
+      failed: 0,
+      skipped: 0,
     });
 
-    expect(body.executionId).toEqual(expect.any(String));
+    expect(evaluate).toHaveBeenCalledOnce();
+    expect(evaluate).toHaveBeenCalledWith(desired);
 
     expect(planning).toHaveBeenCalledOnce();
     expect(planning).toHaveBeenCalledWith(desired);
@@ -983,7 +927,7 @@ export default {
     const execute = vi.fn();
     const executionStore = createFakeExecutionStore();
 
-    const app: App = {
+    const app = createApp({
       observationService: {
         inspect: vi.fn(),
         getLatest: vi.fn(),
@@ -991,16 +935,11 @@ export default {
       planningService: {
         plan: planning,
       },
-      managementService: {
-        register: vi.fn(),
-        unregister: vi.fn(),
-        getScope: vi.fn(),
-      },
       executionService: {
         execute,
       },
       executionStore,
-    };
+    });
 
     const response = await handleRequest(
       new Request("https://example.com/execute", {
@@ -1028,7 +967,7 @@ export default {
     const execute = vi.fn();
     const executionStore = createFakeExecutionStore();
 
-    const app: App = {
+    const app = createApp({
       observationService: {
         inspect: vi.fn(),
         getLatest: vi.fn(),
@@ -1036,16 +975,11 @@ export default {
       planningService: {
         plan: planning,
       },
-      managementService: {
-        register: vi.fn(),
-        unregister: vi.fn(),
-        getScope: vi.fn(),
-      },
       executionService: {
         execute,
       },
       executionStore,
-    };
+    });
 
     const response = await handleRequest(
       new Request("https://example.com/execute", {
@@ -1081,24 +1015,24 @@ export default {
     const execute = vi.fn();
     const executionStore = createFakeExecutionStore();
 
-    const app: App = {
+    const evaluate = vi.fn().mockRejectedValue(new NoObservationError());
+
+    const app = createApp({
       observationService: {
         inspect: vi.fn(),
         getLatest: vi.fn(),
       },
-      planningService: {
-        plan: planning,
+
+      evaluationService: {
+        evaluate,
       },
-      managementService: {
-        register: vi.fn(),
-        unregister: vi.fn(),
-        getScope: vi.fn(),
-      },
+
       executionService: {
         execute,
       },
+
       executionStore,
-    };
+    });
 
     const response = await handleRequest(
       new Request("https://example.com/execute", {
@@ -1120,6 +1054,7 @@ export default {
     });
 
     expect(execute).not.toHaveBeenCalled();
+    expect(evaluate).toHaveBeenCalledOnce();
   });
 
   it("returns 500 when execution fails", async () => {
@@ -1133,26 +1068,32 @@ export default {
       .fn()
       .mockRejectedValue(new Error("sensitive internal failure"));
 
+    const evaluate = vi.fn().mockResolvedValue({
+      operations: [],
+    });
+
     const executionStore = createFakeExecutionStore();
 
-    const app: App = {
+    const app = createApp({
       observationService: {
         inspect: vi.fn(),
         getLatest: vi.fn(),
       },
+
       planningService: {
         plan: planning,
       },
-      managementService: {
-        register: vi.fn(),
-        unregister: vi.fn(),
-        getScope: vi.fn(),
-      },
+
       executionService: {
         execute,
       },
+
+      evaluationService: {
+        evaluate,
+      },
+
       executionStore,
-    };
+    });
 
     const response = await handleRequest(
       new Request("https://example.com/execute", {
@@ -1172,5 +1113,301 @@ export default {
     await expect(response.json()).resolves.toEqual({
       error: "Execution failed",
     });
+  });
+
+  it("evaluates a desired state through the evaluation service", async () => {
+    const evaluate = vi.fn().mockResolvedValue({
+      operations: [
+        {
+          operation: {
+            action: "create",
+            resource: {
+              type: "worker",
+              id: "payments-api",
+            },
+            dependencies: [],
+          },
+          policy: {
+            action: "allow",
+            reason: "Operation is permitted by the default policy",
+          },
+          risk: {
+            level: "low",
+            reason: "Low risk operation",
+          },
+          approval: {
+            requirement: "none",
+            reason: "Operation does not require human approval",
+          },
+          readiness: "ready",
+        },
+      ],
+    });
+
+    const app = createApp({
+      evaluationService: {
+        evaluate,
+      },
+    });
+
+    const desired: DesiredState = {
+      resources: [
+        {
+          resource: {
+            type: "worker",
+            id: "payments-api",
+          },
+          attributes: {},
+        },
+      ],
+    };
+
+    const response = await handleRequest(
+      new Request("http://localhost/evaluate", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(desired),
+      }),
+      app,
+    );
+
+    expect(response.status).toBe(200);
+
+    await expect(response.json()).resolves.toEqual({
+      operations: [
+        {
+          operation: {
+            action: "create",
+            resource: {
+              type: "worker",
+              id: "payments-api",
+            },
+            dependencies: [],
+          },
+          policy: {
+            action: "allow",
+            reason: "Operation is permitted by the default policy",
+          },
+          risk: {
+            level: "low",
+            reason: "Low risk operation",
+          },
+          approval: {
+            requirement: "none",
+            reason: "Operation does not require human approval",
+          },
+          readiness: "ready",
+        },
+      ],
+    });
+
+    expect(evaluate).toHaveBeenCalledOnce();
+    expect(evaluate).toHaveBeenCalledWith(desired);
+  });
+
+  it("returns 400 for invalid JSON on /evaluate", async () => {
+    const app = createApp();
+
+    const response = await handleRequest(
+      new Request("http://localhost/evaluate", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: "{invalid",
+      }),
+      app,
+    );
+
+    expect(response.status).toBe(400);
+
+    await expect(response.json()).resolves.toEqual({
+      error: "Invalid JSON",
+    });
+  });
+
+  it("returns 400 for an invalid desired state on /evaluate", async () => {
+    const evaluate = vi.fn();
+
+    const app = createApp({
+      evaluationService: {
+        evaluate,
+      },
+    });
+
+    const response = await handleRequest(
+      new Request("http://localhost/evaluate", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          resources: "not-an-array",
+        }),
+      }),
+      app,
+    );
+
+    expect(response.status).toBe(400);
+
+    expect(await response.json()).toEqual({
+      error: "Invalid desired state",
+      errors: [
+        {
+          path: "resources",
+          message: "resources must be an array",
+        },
+      ],
+    });
+
+    expect(evaluate).not.toHaveBeenCalled();
+  });
+
+  it("does not execute when evaluation blocks an operation", async () => {
+    const evaluate = vi.fn().mockResolvedValue({
+      operations: [
+        {
+          operation: {
+            action: "delete",
+            resource: {
+              type: "zone",
+              id: "production",
+            },
+            dependencies: [],
+          },
+          policy: {
+            action: "deny",
+            reason: "Deleting zones is not permitted by the default policy",
+          },
+          risk: {
+            level: "critical",
+            reason: "Deleting a zone can have a broad infrastructure impact",
+          },
+          approval: {
+            requirement: "none",
+            reason: "Denied operations cannot proceed to approval",
+          },
+          readiness: "blocked",
+        },
+      ],
+    });
+
+    const plan = vi.fn();
+    const execute = vi.fn();
+
+    const app = createApp({
+      evaluationService: {
+        evaluate,
+      },
+      planningService: {
+        plan,
+      },
+      executionService: {
+        execute,
+      },
+    });
+
+    const response = await handleRequest(
+      new Request("http://localhost/execute", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          resources: [],
+        }),
+      }),
+      app,
+    );
+
+    expect(response.status).toBe(403);
+
+    expect(await response.json()).toEqual({
+      error: "Execution blocked by policy",
+      operations: [
+        expect.objectContaining({
+          readiness: "blocked",
+        }),
+      ],
+    });
+
+    expect(evaluate).toHaveBeenCalledOnce();
+    expect(plan).not.toHaveBeenCalled();
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("does not execute when evaluation requires approval", async () => {
+    const evaluate = vi.fn().mockResolvedValue({
+      operations: [
+        {
+          operation: {
+            action: "delete",
+            resource: {
+              type: "dns_record",
+              id: "production-api",
+            },
+            dependencies: [],
+          },
+          policy: {
+            action: "allow",
+            reason: "Operation is permitted",
+          },
+          risk: {
+            level: "high",
+            reason: "Deleting a DNS record can affect traffic routing",
+          },
+          approval: {
+            requirement: "required",
+            reason: "high risk operations require human approval",
+          },
+          readiness: "approval_required",
+        },
+      ],
+    });
+
+    const plan = vi.fn();
+    const execute = vi.fn();
+
+    const app = createApp({
+      evaluationService: {
+        evaluate,
+      },
+      planningService: {
+        plan,
+      },
+      executionService: {
+        execute,
+      },
+    });
+
+    const response = await handleRequest(
+      new Request("http://localhost/execute", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          resources: [],
+        }),
+      }),
+      app,
+    );
+
+    expect(response.status).toBe(409);
+
+    expect(await response.json()).toEqual({
+      error: "Execution requires human approval",
+      operations: [
+        expect.objectContaining({
+          readiness: "approval_required",
+        }),
+      ],
+    });
+
+    expect(evaluate).toHaveBeenCalledOnce();
+    expect(plan).not.toHaveBeenCalled();
+    expect(execute).not.toHaveBeenCalled();
   });
 });

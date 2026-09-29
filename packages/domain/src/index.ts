@@ -43,3 +43,4 @@ export { getDependents } from "./graph";
 export * from "./execution";
 export * from "./plan-executor";
 export * from "./execution-service";
+export { createDefaultPolicy } from "./policy";

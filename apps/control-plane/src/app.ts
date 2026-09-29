@@ -27,7 +27,15 @@ import { createManagementService, type ManagementService } from "./management";
 import { parseManagementResource } from "./management-request";
 import { parseManagementResourcePath } from "./management-resource-path";
 import { createExecutionService, type ExecutionService } from "./execution";
-import type { OperationExecutor } from "@cloudpilot/domain";
+import {
+  createDefaultApprovalEvaluator,
+  createDefaultPolicy,
+  createDefaultRiskEvaluator,
+  createPlanEvaluator,
+  type OperationExecutor,
+  type PlanEvaluator,
+} from "@cloudpilot/domain";
+import { createEvaluationService, EvaluationService } from "./evaluation";
 
 export interface App {
   observationService: ObservationService;
@@ -35,6 +43,8 @@ export interface App {
   managementService: ManagementService;
   executionService: ExecutionService;
   executionStore: ExecutionStore;
+  planEvaluator: PlanEvaluator;
+  evaluationService: EvaluationService;
 }
 
 export interface AppDependencies {
@@ -68,12 +78,25 @@ export function createApp(dependencies: AppDependencies): App {
     dependencies.operationExecutor,
   );
 
+  const planEvaluator = createPlanEvaluator(
+    createDefaultPolicy(),
+    createDefaultRiskEvaluator(),
+    createDefaultApprovalEvaluator(),
+  );
+
+  const evaluationService = createEvaluationService(
+    planningService,
+    planEvaluator,
+  );
+
   return {
     observationService,
     planningService,
     managementService,
     executionService,
     executionStore: dependencies.executionStore,
+    planEvaluator,
+    evaluationService,
   };
 }
 
@@ -384,6 +407,40 @@ export async function handleRequest(
     }
 
     try {
+      const evaluatedPlan = await app.evaluationService.evaluate(result.state!);
+
+      const blockedOperations = evaluatedPlan.operations.filter(
+        (operation) => operation.readiness === "blocked",
+      );
+
+      if (blockedOperations.length > 0) {
+        return Response.json(
+          {
+            error: "Execution blocked by policy",
+            operations: blockedOperations,
+          },
+          {
+            status: 403,
+          },
+        );
+      }
+
+      const approvalRequiredOperations = evaluatedPlan.operations.filter(
+        (operation) => operation.readiness === "approval_required",
+      );
+
+      if (approvalRequiredOperations.length > 0) {
+        return Response.json(
+          {
+            error: "Execution requires human approval",
+            operations: approvalRequiredOperations,
+          },
+          {
+            status: 409,
+          },
+        );
+      }
+
       const plan = await app.planningService.plan(result.state!);
 
       const executionId = crypto.randomUUID();
@@ -442,6 +499,65 @@ export async function handleRequest(
       return Response.json(
         {
           error: "Execution failed",
+        },
+        {
+          status: 500,
+        },
+      );
+    }
+  }
+
+  if (request.method === "POST" && url.pathname === "/evaluate") {
+    let body: unknown;
+
+    try {
+      body = await request.json();
+    } catch {
+      return Response.json(
+        {
+          error: "Invalid JSON",
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    const result = parseDesiredState(body);
+
+    if (result.errors.length > 0) {
+      return Response.json(
+        {
+          error: "Invalid desired state",
+          errors: result.errors,
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    try {
+      const evaluatedPlan = await app.evaluationService.evaluate(result.state!);
+
+      return Response.json(evaluatedPlan);
+    } catch (error) {
+      if (error instanceof NoObservationError) {
+        return Response.json(
+          {
+            error: error.message,
+          },
+          {
+            status: 404,
+          },
+        );
+      }
+
+      console.error("Evaluation failed", error);
+
+      return Response.json(
+        {
+          error: "Evaluation failed",
         },
         {
           status: 500,
