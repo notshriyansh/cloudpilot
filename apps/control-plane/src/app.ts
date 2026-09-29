@@ -317,6 +317,94 @@ export async function handleRequest(
     }
   }
 
+  if (request.method === "GET" && url.pathname === "/executions/latest") {
+    try {
+      const execution = await app.executionStore.getLatestExecution();
+
+      if (execution === undefined) {
+        return Response.json(
+          {
+            error: "No execution available",
+          },
+          {
+            status: 404,
+          },
+        );
+      }
+
+      return Response.json(execution);
+    } catch (error) {
+      console.error("Latest execution retrieval failed", error);
+
+      return Response.json(
+        {
+          error: "Latest execution retrieval failed",
+        },
+        {
+          status: 500,
+        },
+      );
+    }
+  }
+
+  if (request.method === "GET" && url.pathname.startsWith("/executions/")) {
+    const parts = url.pathname.split("/");
+
+    if (parts.length !== 3 || parts[2] === "") {
+      return Response.json(
+        {
+          error: "Invalid execution path",
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    let executionId: string;
+
+    try {
+      executionId = decodeURIComponent(parts[2]);
+    } catch {
+      return Response.json(
+        {
+          error: "Invalid execution path",
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    try {
+      const execution = await app.executionStore.getExecution(executionId);
+
+      if (execution === undefined) {
+        return Response.json(
+          {
+            error: "Execution not found",
+          },
+          {
+            status: 404,
+          },
+        );
+      }
+
+      return Response.json(execution);
+    } catch (error) {
+      console.error("Execution retrieval failed", error);
+
+      return Response.json(
+        {
+          error: "Execution retrieval failed",
+        },
+        {
+          status: 500,
+        },
+      );
+    }
+  }
+
   if (request.method === "POST" && url.pathname === "/plan") {
     let body: unknown;
 
