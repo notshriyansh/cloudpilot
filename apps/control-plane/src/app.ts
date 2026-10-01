@@ -36,12 +36,17 @@ import {
   type PlanEvaluator,
 } from "@cloudpilot/domain";
 import { createEvaluationService, EvaluationService } from "./evaluation";
+import {
+  createVerificationService,
+  type VerificationService,
+} from "./verification";
 
 export interface App {
   observationService: ObservationService;
   planningService: PlanningService;
   managementService: ManagementService;
   executionService: ExecutionService;
+  verificationService: VerificationService;
   executionStore: ExecutionStore;
   planEvaluator: PlanEvaluator;
   evaluationService: EvaluationService;
@@ -89,11 +94,14 @@ export function createApp(dependencies: AppDependencies): App {
     planEvaluator,
   );
 
+  const verificationService = createVerificationService(observationService);
+
   return {
     observationService,
     planningService,
     managementService,
     executionService,
+    verificationService,
     executionStore: dependencies.executionStore,
     planEvaluator,
     evaluationService,
@@ -542,6 +550,11 @@ export async function handleRequest(
 
       try {
         const summary = await app.executionService.execute(plan);
+
+        const verification = await app.verificationService.verify(
+          result.state!,
+        );
+
         const completedAt = new Date().toISOString();
 
         const execution = {
@@ -550,6 +563,7 @@ export async function handleRequest(
           completedAt,
           status: summary.status,
           summary,
+          verification,
         } as const;
 
         await app.executionStore.saveExecution(execution);
@@ -557,6 +571,7 @@ export async function handleRequest(
         return Response.json({
           executionId,
           ...summary,
+          verification,
         });
       } catch (executionError) {
         const completedAt = new Date().toISOString();
@@ -646,6 +661,54 @@ export async function handleRequest(
       return Response.json(
         {
           error: "Evaluation failed",
+        },
+        {
+          status: 500,
+        },
+      );
+    }
+  }
+
+  if (request.method === "POST" && url.pathname === "/verify") {
+    let body: unknown;
+
+    try {
+      body = await request.json();
+    } catch {
+      return Response.json(
+        {
+          error: "Invalid JSON",
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    const result = parseDesiredState(body);
+
+    if (result.errors.length > 0) {
+      return Response.json(
+        {
+          error: "Invalid desired state",
+          errors: result.errors,
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    try {
+      const verification = await app.verificationService.verify(result.state!);
+
+      return Response.json(verification);
+    } catch (error) {
+      console.error("Verification failed", error);
+
+      return Response.json(
+        {
+          error: "Verification failed",
         },
         {
           status: 500,

@@ -1,6 +1,7 @@
 import type { ExecutionResult, OperationExecutor } from "./execution";
 import type { Plan } from "./plan";
 import { createPlanExecutor } from "./plan-executor";
+import type { VerificationResult } from "./verification";
 
 export interface ExecutionSummary {
   status: "succeeded" | "failed";
@@ -22,6 +23,7 @@ export interface ExecutionRecord {
   completedAt?: string;
   status: ExecutionLifecycleStatus;
   summary?: ExecutionSummary;
+  verification?: VerificationResult;
 }
 
 export interface ExecutionService {

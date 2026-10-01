@@ -71,6 +71,10 @@ function createApp(overrides: Partial<App> = {}): App {
 
     evaluationService: createFakeEvaluationService(),
 
+    verificationService: {
+      verify: vi.fn(),
+    },
+
     ...overrides,
   };
 }
@@ -801,6 +805,11 @@ export default {
       ],
     };
 
+    const verify = vi.fn().mockResolvedValue({
+      status: "verified" as const,
+      changes: [],
+    });
+
     const plan: Plan = {
       operations: [
         {
@@ -876,6 +885,9 @@ export default {
       evaluationService: {
         evaluate,
       },
+      verificationService: {
+        verify,
+      },
       executionStore,
     });
 
@@ -910,6 +922,10 @@ export default {
       completed: 1,
       failed: 0,
       skipped: 0,
+      verification: {
+        status: "verified",
+        changes: [],
+      },
     });
 
     expect(evaluate).toHaveBeenCalledOnce();
@@ -920,6 +936,71 @@ export default {
 
     expect(execute).toHaveBeenCalledOnce();
     expect(execute).toHaveBeenCalledWith(plan);
+
+    expect(verify).toHaveBeenCalledOnce();
+    expect(verify).toHaveBeenCalledWith(desired);
+  });
+
+  it("returns 500 when post-execution verification fails", async () => {
+    const plan: Plan = {
+      operations: [],
+    };
+
+    const planning = vi.fn().mockResolvedValue(plan);
+
+    const execute = vi.fn().mockResolvedValue({
+      status: "succeeded" as const,
+      results: [],
+      completed: 0,
+      failed: 0,
+      skipped: 0,
+    });
+
+    const evaluate = vi.fn().mockResolvedValue({
+      operations: [],
+    });
+
+    const verify = vi.fn().mockRejectedValue(new Error("verification failed"));
+
+    const executionStore = createFakeExecutionStore();
+
+    const app = createApp({
+      planningService: {
+        plan: planning,
+      },
+      executionService: {
+        execute,
+      },
+      evaluationService: {
+        evaluate,
+      },
+      verificationService: {
+        verify,
+      },
+      executionStore,
+    });
+
+    const response = await handleRequest(
+      new Request("http://localhost/execute", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          resources: [],
+        }),
+      }),
+      app,
+    );
+
+    expect(response.status).toBe(500);
+
+    await expect(response.json()).resolves.toEqual({
+      error: "Execution failed",
+    });
+
+    expect(execute).toHaveBeenCalledOnce();
+    expect(verify).toHaveBeenCalledOnce();
   });
 
   it("returns 400 for invalid JSON on POST /execute", async () => {

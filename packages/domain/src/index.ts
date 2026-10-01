@@ -44,3 +44,4 @@ export * from "./execution";
 export * from "./plan-executor";
 export * from "./execution-service";
 export { createDefaultPolicy } from "./policy";
+export * from "./verification";
