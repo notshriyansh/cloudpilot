@@ -40,6 +40,8 @@ import {
   createVerificationService,
   type VerificationService,
 } from "./verification";
+import type { ReconciliationService } from "./reconciliation";
+import { createReconciliationService } from "./reconciliation-service";
 
 export interface App {
   observationService: ObservationService;
@@ -50,6 +52,7 @@ export interface App {
   executionStore: ExecutionStore;
   planEvaluator: PlanEvaluator;
   evaluationService: EvaluationService;
+  reconciliationService: ReconciliationService;
 }
 
 export interface AppDependencies {
@@ -96,6 +99,14 @@ export function createApp(dependencies: AppDependencies): App {
 
   const verificationService = createVerificationService(observationService);
 
+  const reconciliationService = createReconciliationService(
+    observationService,
+    planningService,
+    evaluationService,
+    executionService,
+    verificationService,
+  );
+
   return {
     observationService,
     planningService,
@@ -105,6 +116,7 @@ export function createApp(dependencies: AppDependencies): App {
     executionStore: dependencies.executionStore,
     planEvaluator,
     evaluationService,
+    reconciliationService,
   };
 }
 
@@ -709,6 +721,78 @@ export async function handleRequest(
       return Response.json(
         {
           error: "Verification failed",
+        },
+        {
+          status: 500,
+        },
+      );
+    }
+  }
+
+  if (request.method === "POST" && url.pathname === "/reconcile") {
+    let body: unknown;
+
+    try {
+      body = await request.json();
+    } catch {
+      return Response.json(
+        {
+          error: "Invalid JSON",
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    const result = parseDesiredState(body);
+
+    if (result.errors.length > 0) {
+      return Response.json(
+        {
+          error: "Invalid desired state",
+          errors: result.errors,
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    try {
+      const reconciliation = await app.reconciliationService.reconcile(
+        result.state!,
+      );
+
+      switch (reconciliation.status) {
+        case "blocked":
+          return Response.json(reconciliation, {
+            status: 403,
+          });
+
+        case "approval_required":
+          return Response.json(reconciliation, {
+            status: 409,
+          });
+
+        case "in_sync":
+        case "verified":
+        case "mismatch":
+          return Response.json(reconciliation, {
+            status: 200,
+          });
+
+        case "failed":
+          return Response.json(reconciliation, {
+            status: 500,
+          });
+      }
+    } catch (error) {
+      console.error("Reconciliation failed", error);
+
+      return Response.json(
+        {
+          error: "Reconciliation failed",
         },
         {
           status: 500,
