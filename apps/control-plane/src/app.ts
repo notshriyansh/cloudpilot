@@ -22,6 +22,8 @@ import {
   type ManagementScopeStore,
   type StateStore,
   ExecutionStore,
+  type DesiredStateStore,
+  createD1DesiredStateStore,
 } from "@cloudpilot/state-store";
 import { createManagementService, type ManagementService } from "./management";
 import { parseManagementResource } from "./management-request";
@@ -48,10 +50,11 @@ export interface App {
   planningService: PlanningService;
   managementService: ManagementService;
   executionService: ExecutionService;
-  verificationService: VerificationService;
   executionStore: ExecutionStore;
+  desiredStateStore: DesiredStateStore;
   planEvaluator: PlanEvaluator;
   evaluationService: EvaluationService;
+  verificationService: VerificationService;
   reconciliationService: ReconciliationService;
 }
 
@@ -59,6 +62,7 @@ export interface AppDependencies {
   inventory: Inventory;
   stateStore: StateStore;
   executionStore: ExecutionStore;
+  desiredStateStore: DesiredStateStore;
   clock: Clock;
   idGenerator: IdGenerator;
   managementScopeStore: ManagementScopeStore;
@@ -112,10 +116,11 @@ export function createApp(dependencies: AppDependencies): App {
     planningService,
     managementService,
     executionService,
-    verificationService,
     executionStore: dependencies.executionStore,
+    desiredStateStore: dependencies.desiredStateStore,
     planEvaluator,
     evaluationService,
+    verificationService,
     reconciliationService,
   };
 }
@@ -131,6 +136,7 @@ export function createProductionApp(env: Env) {
   const inventory = createInventory(provider);
   const stateStore = createD1StateStore(env.cloudpilot);
   const executionStore = createD1ExecutionStore(env.cloudpilot);
+  const desiredStateStore = createD1DesiredStateStore(env.cloudpilot);
 
   const managementScopeStore = createD1ManagementScopeStore(env.cloudpilot);
 
@@ -138,6 +144,7 @@ export function createProductionApp(env: Env) {
     inventory,
     stateStore,
     executionStore,
+    desiredStateStore,
     clock: {
       now: () => new Date(),
     },
@@ -793,6 +800,84 @@ export async function handleRequest(
       return Response.json(
         {
           error: "Reconciliation failed",
+        },
+        {
+          status: 500,
+        },
+      );
+    }
+  }
+
+  if (request.method === "GET" && url.pathname === "/desired-state") {
+    try {
+      const desiredState = await app.desiredStateStore.getDesiredState();
+
+      if (desiredState === undefined) {
+        return Response.json(
+          {
+            error: "No desired state configured",
+          },
+          {
+            status: 404,
+          },
+        );
+      }
+
+      return Response.json(desiredState);
+    } catch (error) {
+      console.error("Desired state retrieval failed", error);
+
+      return Response.json(
+        {
+          error: "Desired state retrieval failed",
+        },
+        {
+          status: 500,
+        },
+      );
+    }
+  }
+
+  if (request.method === "PUT" && url.pathname === "/desired-state") {
+    let body: unknown;
+
+    try {
+      body = await request.json();
+    } catch {
+      return Response.json(
+        {
+          error: "Invalid JSON",
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    const result = parseDesiredState(body);
+
+    if (result.errors.length > 0) {
+      return Response.json(
+        {
+          error: "Invalid desired state",
+          errors: result.errors,
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    try {
+      await app.desiredStateStore.saveDesiredState(result.state!);
+
+      return Response.json(result.state);
+    } catch (error) {
+      console.error("Desired state update failed", error);
+
+      return Response.json(
+        {
+          error: "Desired state update failed",
         },
         {
           status: 500,
