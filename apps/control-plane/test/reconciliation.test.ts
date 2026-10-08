@@ -3,11 +3,16 @@ import { describe, expect, it, vi } from "vitest";
 import type {
   DesiredState,
   ExecutionSummary,
+  ObservedState,
   Plan,
   VerificationResult,
 } from "@cloudpilot/domain";
+import type { DesiredStateStore } from "@cloudpilot/state-store";
 
-import { createReconciliationService } from "../src/reconciliation-service";
+import {
+  createReconciliationService,
+  NoDesiredStateError,
+} from "../src/reconciliation-service";
 
 describe("ReconciliationService", () => {
   const desired: DesiredState = {
@@ -25,7 +30,7 @@ describe("ReconciliationService", () => {
     ],
   };
 
-  const changedObservedState: DesiredState = {
+  const changedObservedState: ObservedState = {
     resources: [
       {
         resource: {
@@ -83,6 +88,22 @@ describe("ReconciliationService", () => {
     };
   }
 
+  function createDesiredStateStore(
+    state: DesiredState = desired,
+  ): DesiredStateStore {
+    return {
+      saveDesiredState: vi.fn(),
+      getDesiredState: vi.fn().mockResolvedValue(state),
+    };
+  }
+
+  function createEmptyDesiredStateStore(): DesiredStateStore {
+    return {
+      saveDesiredState: vi.fn(),
+      getDesiredState: vi.fn().mockResolvedValue(undefined),
+    };
+  }
+
   function createPlanningService() {
     return {
       plan: vi.fn().mockResolvedValue(plan),
@@ -134,12 +155,16 @@ describe("ReconciliationService", () => {
   }
 
   function createService(overrides?: {
+    desiredStateStore?: DesiredStateStore;
     observationService?: ReturnType<typeof createObservationService>;
     planningService?: ReturnType<typeof createPlanningService>;
     evaluationService?: ReturnType<typeof createEvaluationService>;
     executionService?: ReturnType<typeof createExecutionService>;
     verificationService?: ReturnType<typeof createVerificationService>;
   }) {
+    const desiredStateStore =
+      overrides?.desiredStateStore ?? createDesiredStateStore();
+
     const observationService =
       overrides?.observationService ?? createObservationService();
 
@@ -156,6 +181,7 @@ describe("ReconciliationService", () => {
       overrides?.verificationService ?? createVerificationService();
 
     const service = createReconciliationService(
+      desiredStateStore,
       observationService,
       planningService,
       evaluationService,
@@ -165,6 +191,7 @@ describe("ReconciliationService", () => {
 
     return {
       service,
+      desiredStateStore,
       observationService,
       planningService,
       evaluationService,
@@ -186,7 +213,7 @@ describe("ReconciliationService", () => {
       observationService,
     });
 
-    const result = await service.reconcile(desired);
+    const result = await service.reconcile();
 
     expect(result).toEqual({
       status: "in_sync",
@@ -200,6 +227,21 @@ describe("ReconciliationService", () => {
     expect(verificationService.verify).not.toHaveBeenCalled();
   });
 
+  it("throws when desired state is not configured", async () => {
+    const desiredStateStore = createEmptyDesiredStateStore();
+
+    const { service, observationService } = createService({
+      desiredStateStore,
+    });
+
+    await expect(service.reconcile()).rejects.toBeInstanceOf(
+      NoDesiredStateError,
+    );
+
+    expect(desiredStateStore.getDesiredState).toHaveBeenCalledOnce();
+    expect(observationService.inspect).not.toHaveBeenCalled();
+  });
+
   it("plans, evaluates, executes, and verifies when drift exists", async () => {
     const {
       service,
@@ -210,7 +252,7 @@ describe("ReconciliationService", () => {
       verificationService,
     } = createService();
 
-    const result = await service.reconcile(desired);
+    const result = await service.reconcile();
 
     expect(result.status).toBe("verified");
     expect(result.desired).toEqual(desired);
@@ -261,7 +303,7 @@ describe("ReconciliationService", () => {
         evaluationService,
       });
 
-    const result = await service.reconcile(desired);
+    const result = await service.reconcile();
 
     expect(result.status).toBe("blocked");
     expect(result.plan).toEqual(plan);
@@ -299,7 +341,7 @@ describe("ReconciliationService", () => {
       evaluationService,
     });
 
-    const result = await service.reconcile(desired);
+    const result = await service.reconcile();
 
     expect(result.status).toBe("approval_required");
     expect(result.plan).toEqual(plan);
@@ -330,7 +372,7 @@ describe("ReconciliationService", () => {
       verificationService,
     });
 
-    const result = await service.reconcile(desired);
+    const result = await service.reconcile();
 
     expect(result.status).toBe("mismatch");
     expect(result.execution).toEqual(execution);
@@ -353,7 +395,7 @@ describe("ReconciliationService", () => {
       verificationService,
     });
 
-    const result = await service.reconcile(desired);
+    const result = await service.reconcile();
 
     expect(result.status).toBe("failed");
     expect(result.verification?.status).toBe("failed");

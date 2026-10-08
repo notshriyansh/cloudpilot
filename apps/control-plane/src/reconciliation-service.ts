@@ -1,5 +1,6 @@
-import { diffStates, type DesiredState } from "@cloudpilot/domain";
+import { diffStates } from "@cloudpilot/domain";
 
+import type { DesiredStateStore } from "@cloudpilot/state-store";
 import type { ObservationService } from "./observation";
 import type { PlanningService } from "./planning";
 import type { EvaluationService } from "./evaluation";
@@ -7,7 +8,15 @@ import type { ExecutionService } from "./execution";
 import type { VerificationService } from "./verification";
 import { ReconciliationService } from "./reconciliation";
 
+export class NoDesiredStateError extends Error {
+  constructor() {
+    super("No desired state configured");
+    this.name = "NoDesiredStateError";
+  }
+}
+
 export function createReconciliationService(
+  desiredStateStore: DesiredStateStore,
   observationService: ObservationService,
   planningService: PlanningService,
   evaluationService: EvaluationService,
@@ -15,7 +24,13 @@ export function createReconciliationService(
   verificationService: VerificationService,
 ): ReconciliationService {
   return {
-    async reconcile(desired) {
+    async reconcile() {
+      const desired = await desiredStateStore.getDesiredState();
+
+      if (desired === undefined) {
+        throw new NoDesiredStateError();
+      }
+
       const observation = await observationService.inspect();
 
       const diff = diffStates(desired, observation.state);

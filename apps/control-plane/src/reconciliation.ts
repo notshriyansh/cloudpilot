@@ -23,5 +23,5 @@ export interface ReconciliationResult {
 }
 
 export interface ReconciliationService {
-  reconcile(desired: DesiredState): Promise<ReconciliationResult>;
+  reconcile(): Promise<ReconciliationResult>;
 }
