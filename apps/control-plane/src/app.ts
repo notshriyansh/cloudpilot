@@ -43,7 +43,10 @@ import {
   type VerificationService,
 } from "./verification";
 import type { ReconciliationService } from "./reconciliation";
-import { createReconciliationService } from "./reconciliation-service";
+import {
+  createReconciliationService,
+  NoDesiredStateError,
+} from "./reconciliation-service";
 
 export interface App {
   observationService: ObservationService;
@@ -104,6 +107,7 @@ export function createApp(dependencies: AppDependencies): App {
   const verificationService = createVerificationService(observationService);
 
   const reconciliationService = createReconciliationService(
+    dependencies.desiredStateStore,
     observationService,
     planningService,
     evaluationService,
@@ -737,39 +741,8 @@ export async function handleRequest(
   }
 
   if (request.method === "POST" && url.pathname === "/reconcile") {
-    let body: unknown;
-
     try {
-      body = await request.json();
-    } catch {
-      return Response.json(
-        {
-          error: "Invalid JSON",
-        },
-        {
-          status: 400,
-        },
-      );
-    }
-
-    const result = parseDesiredState(body);
-
-    if (result.errors.length > 0) {
-      return Response.json(
-        {
-          error: "Invalid desired state",
-          errors: result.errors,
-        },
-        {
-          status: 400,
-        },
-      );
-    }
-
-    try {
-      const reconciliation = await app.reconciliationService.reconcile(
-        result.state!,
-      );
+      const reconciliation = await app.reconciliationService.reconcile();
 
       switch (reconciliation.status) {
         case "blocked":
@@ -783,6 +756,7 @@ export async function handleRequest(
           });
 
         case "in_sync":
+        case "executed":
         case "verified":
         case "mismatch":
           return Response.json(reconciliation, {
@@ -795,6 +769,17 @@ export async function handleRequest(
           });
       }
     } catch (error) {
+      if (error instanceof NoDesiredStateError) {
+        return Response.json(
+          {
+            error: error.message,
+          },
+          {
+            status: 404,
+          },
+        );
+      }
+
       console.error("Reconciliation failed", error);
 
       return Response.json(

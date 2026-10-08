@@ -33,10 +33,6 @@ describe("apiReconciliation", () => {
     const response = await handleRequest(
       new Request("https://example.com/reconcile", {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify(desired),
       }),
       app,
     );
@@ -49,7 +45,7 @@ describe("apiReconciliation", () => {
     });
 
     expect(reconcile).toHaveBeenCalledOnce();
-    expect(reconcile).toHaveBeenCalledWith(desired);
+    expect(reconcile).toHaveBeenCalledWith();
   });
 
   it("returns 403 when POST /reconcile is blocked by policy", async () => {
@@ -74,10 +70,6 @@ describe("apiReconciliation", () => {
     const response = await handleRequest(
       new Request("https://example.com/reconcile", {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify(desired),
       }),
       app,
     );
@@ -107,58 +99,10 @@ describe("apiReconciliation", () => {
     const response = await handleRequest(
       new Request("https://example.com/reconcile", {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify(desired),
       }),
       app,
     );
 
     expect(response.status).toBe(409);
-  });
-
-  it("returns 400 for invalid JSON on POST /reconcile", async () => {
-    const app = createApp();
-
-    const response = await handleRequest(
-      new Request("https://example.com/reconcile", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: "{invalid",
-      }),
-      app,
-    );
-
-    expect(response.status).toBe(400);
-
-    expect(await response.json()).toEqual({
-      error: "Invalid JSON",
-    });
-  });
-
-  it("returns 400 for invalid desired state on POST /reconcile", async () => {
-    const app = createApp();
-
-    const response = await handleRequest(
-      new Request("https://example.com/reconcile", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          invalid: true,
-        }),
-      }),
-      app,
-    );
-
-    expect(response.status).toBe(400);
-
-    expect(await response.json()).toMatchObject({
-      error: "Invalid desired state",
-    });
   });
 });
