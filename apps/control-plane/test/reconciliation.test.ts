@@ -7,7 +7,14 @@ import type {
   Plan,
   VerificationResult,
 } from "@cloudpilot/domain";
-import type { DesiredStateStore } from "@cloudpilot/state-store";
+import type {
+  DesiredStateStore,
+  ReconciliationRunStore,
+} from "@cloudpilot/state-store";
+
+import { createMemoryReconciliationRunStore } from "@cloudpilot/state-store";
+
+import type { Clock, IdGenerator } from "../src/observation";
 
 import {
   createReconciliationService,
@@ -161,6 +168,9 @@ describe("ReconciliationService", () => {
     evaluationService?: ReturnType<typeof createEvaluationService>;
     executionService?: ReturnType<typeof createExecutionService>;
     verificationService?: ReturnType<typeof createVerificationService>;
+    reconciliationRunStore?: ReconciliationRunStore;
+    clock?: Clock;
+    idGenerator?: IdGenerator;
   }) {
     const desiredStateStore =
       overrides?.desiredStateStore ?? createDesiredStateStore();
@@ -180,6 +190,17 @@ describe("ReconciliationService", () => {
     const verificationService =
       overrides?.verificationService ?? createVerificationService();
 
+    const reconciliationRunStore =
+      overrides?.reconciliationRunStore ?? createMemoryReconciliationRunStore();
+
+    const clock = overrides?.clock ?? {
+      now: () => new Date("2026-10-09T10:00:00.000Z"),
+    };
+
+    const idGenerator = overrides?.idGenerator ?? {
+      generate: () => "reconciliation-1",
+    };
+
     const service = createReconciliationService(
       desiredStateStore,
       observationService,
@@ -187,6 +208,9 @@ describe("ReconciliationService", () => {
       evaluationService,
       executionService,
       verificationService,
+      reconciliationRunStore,
+      clock,
+      idGenerator,
     );
 
     return {
@@ -197,6 +221,9 @@ describe("ReconciliationService", () => {
       evaluationService,
       executionService,
       verificationService,
+      reconciliationRunStore,
+      clock,
+      idGenerator,
     };
   }
 
@@ -404,5 +431,187 @@ describe("ReconciliationService", () => {
       desired,
       error: "Inventory unavailable",
     });
+  });
+
+  it("persists a running record before inspection and a succeeded terminal record", async () => {
+    const { service, observationService, reconciliationRunStore } =
+      createService();
+
+    const saveRun = vi.spyOn(reconciliationRunStore, "saveRun");
+
+    const result = await service.reconcile();
+
+    expect(result.status).toBe("verified");
+    expect(saveRun).toHaveBeenCalledTimes(2);
+
+    expect(saveRun.mock.calls[0][0]).toEqual({
+      id: "reconciliation-1",
+      startedAt: "2026-10-09T10:00:00.000Z",
+      status: "running",
+    });
+
+    expect(saveRun.mock.invocationCallOrder[0]).toBeLessThan(
+      observationService.inspect.mock.invocationCallOrder[0],
+    );
+
+    expect(saveRun.mock.calls[1][0]).toMatchObject({
+      id: "reconciliation-1",
+      startedAt: "2026-10-09T10:00:00.000Z",
+      completedAt: "2026-10-09T10:00:00.000Z",
+      status: "succeeded",
+      result: {
+        status: "verified",
+      },
+    });
+
+    await expect(
+      reconciliationRunStore.getRun("reconciliation-1"),
+    ).resolves.toMatchObject({
+      id: "reconciliation-1",
+      status: "succeeded",
+      result: {
+        status: "verified",
+      },
+    });
+  });
+
+  it("persists blocked outcomes as completed reconciliation runs", async () => {
+    const evaluationService = {
+      evaluate: vi.fn().mockResolvedValue({
+        operations: [
+          {
+            operation: plan.operations[0],
+            policy: {
+              action: "deny",
+              reason: "Protected resource",
+            },
+            risk: {
+              level: "high",
+              reason: "Protected resource",
+            },
+            approval: {
+              requirement: "none",
+              reason: "Policy denied",
+            },
+            readiness: "blocked",
+          },
+        ],
+      }),
+    };
+
+    const { service, reconciliationRunStore } = createService({
+      evaluationService,
+    });
+
+    const result = await service.reconcile();
+
+    expect(result.status).toBe("blocked");
+
+    await expect(
+      reconciliationRunStore.getRun("reconciliation-1"),
+    ).resolves.toMatchObject({
+      status: "succeeded",
+      result: {
+        status: "blocked",
+      },
+    });
+  });
+
+  it("persists missing desired state as a failed run and rethrows the error", async () => {
+    const desiredStateStore = createEmptyDesiredStateStore();
+
+    const { service, reconciliationRunStore } = createService({
+      desiredStateStore,
+    });
+
+    await expect(service.reconcile()).rejects.toBeInstanceOf(
+      NoDesiredStateError,
+    );
+
+    await expect(
+      reconciliationRunStore.getRun("reconciliation-1"),
+    ).resolves.toMatchObject({
+      status: "failed",
+      result: {
+        status: "failed",
+        error: "No desired state configured",
+      },
+    });
+  });
+
+  it("persists verification failure as a failed reconciliation run", async () => {
+    const verificationService = {
+      verify: vi.fn().mockResolvedValue({
+        status: "failed",
+        desired,
+        error: "Inventory unavailable",
+      } satisfies VerificationResult),
+    };
+
+    const { service, reconciliationRunStore } = createService({
+      verificationService,
+    });
+
+    const result = await service.reconcile();
+
+    expect(result.status).toBe("failed");
+
+    await expect(
+      reconciliationRunStore.getRun("reconciliation-1"),
+    ).resolves.toMatchObject({
+      status: "failed",
+      result: {
+        status: "failed",
+      },
+    });
+  });
+
+  it("persists unexpected workflow exceptions and rethrows them", async () => {
+    const failure = new Error("Inventory unavailable");
+
+    const observationService = {
+      inspect: vi.fn().mockRejectedValue(failure),
+      getLatest: vi.fn(),
+    };
+
+    const { service, reconciliationRunStore } = createService({
+      observationService,
+    });
+
+    await expect(service.reconcile()).rejects.toBe(failure);
+
+    await expect(
+      reconciliationRunStore.getRun("reconciliation-1"),
+    ).resolves.toMatchObject({
+      status: "failed",
+      result: {
+        status: "failed",
+        error: "Inventory unavailable",
+      },
+    });
+  });
+
+  it("does not inspect infrastructure if the initial run record cannot be saved", async () => {
+    const observationService = createObservationService();
+
+    const reconciliationRunStore: ReconciliationRunStore = {
+      saveRun: vi
+        .fn()
+        .mockRejectedValue(new Error("Reconciliation storage unavailable")),
+      getRun: vi.fn().mockResolvedValue(undefined),
+      getLatestRun: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const { service } = createService({
+      observationService,
+      reconciliationRunStore,
+    });
+
+    await expect(service.reconcile()).rejects.toThrow(
+      "Reconciliation storage unavailable",
+    );
+
+    expect(reconciliationRunStore.saveRun).toHaveBeenCalledOnce();
+    expect(observationService.inspect).not.toHaveBeenCalled();
   });
 });

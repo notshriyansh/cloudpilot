@@ -19,11 +19,13 @@ import {
   createD1ManagementScopeStore,
   createD1ExecutionStore,
   createD1StateStore,
+  createD1DesiredStateStore,
+  createD1ReconciliationRunStore,
   type ManagementScopeStore,
   type StateStore,
-  ExecutionStore,
+  type ExecutionStore,
   type DesiredStateStore,
-  createD1DesiredStateStore,
+  type ReconciliationRunStore,
 } from "@cloudpilot/state-store";
 import { createManagementService, type ManagementService } from "./management";
 import { parseManagementResource } from "./management-request";
@@ -55,6 +57,7 @@ export interface App {
   executionService: ExecutionService;
   executionStore: ExecutionStore;
   desiredStateStore: DesiredStateStore;
+  reconciliationRunStore: ReconciliationRunStore;
   planEvaluator: PlanEvaluator;
   evaluationService: EvaluationService;
   verificationService: VerificationService;
@@ -66,6 +69,7 @@ export interface AppDependencies {
   stateStore: StateStore;
   executionStore: ExecutionStore;
   desiredStateStore: DesiredStateStore;
+  reconciliationRunStore: ReconciliationRunStore;
   clock: Clock;
   idGenerator: IdGenerator;
   managementScopeStore: ManagementScopeStore;
@@ -113,6 +117,9 @@ export function createApp(dependencies: AppDependencies): App {
     evaluationService,
     executionService,
     verificationService,
+    dependencies.reconciliationRunStore,
+    dependencies.clock,
+    dependencies.idGenerator,
   );
 
   return {
@@ -122,6 +129,7 @@ export function createApp(dependencies: AppDependencies): App {
     executionService,
     executionStore: dependencies.executionStore,
     desiredStateStore: dependencies.desiredStateStore,
+    reconciliationRunStore: dependencies.reconciliationRunStore,
     planEvaluator,
     evaluationService,
     verificationService,
@@ -141,6 +149,7 @@ export function createProductionApp(env: Env) {
   const stateStore = createD1StateStore(env.cloudpilot);
   const executionStore = createD1ExecutionStore(env.cloudpilot);
   const desiredStateStore = createD1DesiredStateStore(env.cloudpilot);
+  const reconciliationRunStore = createD1ReconciliationRunStore(env.cloudpilot);
 
   const managementScopeStore = createD1ManagementScopeStore(env.cloudpilot);
 
@@ -149,6 +158,7 @@ export function createProductionApp(env: Env) {
     stateStore,
     executionStore,
     desiredStateStore,
+    reconciliationRunStore,
     clock: {
       now: () => new Date(),
     },
