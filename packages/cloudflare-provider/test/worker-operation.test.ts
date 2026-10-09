@@ -35,6 +35,7 @@ function createProvider() {
     listZones: vi.fn(),
     listDnsRecords: vi.fn(),
     listWorkers: vi.fn(),
+    getWorkerScript: vi.fn().mockResolvedValue("worker-script"),
     deployWorker: vi.fn().mockResolvedValue(undefined),
     deleteWorker: vi.fn().mockResolvedValue(undefined),
   };

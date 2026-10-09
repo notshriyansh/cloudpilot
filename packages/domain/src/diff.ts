@@ -21,12 +21,29 @@ export interface StateDiff {
   changes: ResourceChange[];
 }
 
+function workerAttributesEqual(
+  desired: Record<string, unknown>,
+  observed: Record<string, unknown>,
+): boolean {
+  return Object.entries(desired).every(([key, value]) => {
+    return (
+      Object.prototype.hasOwnProperty.call(observed, key) &&
+      areValuesEqual(value, observed[key])
+    );
+  });
+}
+
 function resourceStateEqual(
   desired: ResourceState,
   observed: ResourceState,
 ): boolean {
+  const attributesEqual =
+    desired.resource.type === "worker" && observed.resource.type === "worker"
+      ? workerAttributesEqual(desired.attributes, observed.attributes)
+      : areValuesEqual(desired.attributes, observed.attributes);
+
   return (
-    areValuesEqual(desired.attributes, observed.attributes) &&
+    attributesEqual &&
     areRelationshipsEqual(desired.relationships, observed.relationships)
   );
 }

@@ -888,6 +888,84 @@ describe("CloudflareProvider", () => {
     });
   });
 
+  it("retrieves deployed Worker script content as raw text", async () => {
+    const script = [
+      "export default {",
+      "  fetch() {",
+      '    return new Response("hello");',
+      "  },",
+      "};",
+    ].join("\n");
+
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(script, {
+        status: 200,
+        headers: {
+          "Content-Type": "application/javascript+module",
+        },
+      }),
+    );
+
+    const provider = createCloudflareProvider(
+      {
+        accountId: "account-123",
+        apiToken: "test-token",
+      },
+      fetchMock,
+    );
+
+    await expect(provider.getWorkerScript("api-worker")).resolves.toBe(script);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.cloudflare.com/client/v4/accounts/account-123/workers/scripts/api-worker",
+      {
+        method: "GET",
+        headers: {
+          Authorization: "Bearer test-token",
+          Accept: "*/*",
+        },
+      },
+    );
+  });
+
+  it("preserves Cloudflare errors when retrieving Worker script content fails", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: false,
+          errors: [
+            {
+              code: 10000,
+              message: "Authentication error",
+            },
+          ],
+          result: null,
+        }),
+        {
+          status: 403,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    );
+
+    const provider = createCloudflareProvider(
+      {
+        accountId: "account-123",
+        apiToken: "test-token",
+      },
+      fetchMock,
+    );
+
+    await expect(provider.getWorkerScript("api-worker")).rejects.toMatchObject({
+      name: "CloudflareProviderError",
+      status: 403,
+      code: 10000,
+      message: "Authentication error",
+    });
+  });
+
   it("deploys a Worker using multipart module upload", async () => {
     let request: Request | undefined;
 

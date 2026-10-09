@@ -3,6 +3,7 @@ import type { ResourceState } from "@cloudpilot/domain";
 
 export function cloudflareWorkerToResource(
   worker: CloudflareWorker,
+  script: string,
 ): ResourceState {
   return {
     resource: {
@@ -10,12 +11,7 @@ export function cloudflareWorkerToResource(
       id: worker.id,
     },
     attributes: {
-      ...(worker.createdAt !== undefined
-        ? { createdAt: worker.createdAt }
-        : {}),
-      ...(worker.modifiedAt !== undefined
-        ? { modifiedAt: worker.modifiedAt }
-        : {}),
+      script,
       ...(worker.compatibilityDate !== undefined
         ? { compatibilityDate: worker.compatibilityDate }
         : {}),

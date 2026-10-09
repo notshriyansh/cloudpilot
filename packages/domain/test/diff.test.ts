@@ -385,4 +385,93 @@ describe("diffStates", () => {
       ],
     });
   });
+
+  it("ignores observed-only Worker metadata and omitted configuration", () => {
+    const desired: DesiredState = {
+      resources: [
+        {
+          resource: { type: "worker", id: "worker-1" },
+          attributes: {
+            script: "export default { fetch() {} };",
+          },
+        },
+      ],
+    };
+
+    const observed: ObservedState = {
+      resources: [
+        {
+          resource: { type: "worker", id: "worker-1" },
+          attributes: {
+            script: "export default { fetch() {} };",
+            compatibilityDate: "2026-08-31",
+            createdAt: "2026-09-01T10:00:00.000Z",
+            modifiedAt: "2026-09-10T12:00:00.000Z",
+          },
+        },
+      ],
+    };
+
+    expect(diffStates(desired, observed)).toEqual({ changes: [] });
+  });
+
+  it("detects Worker script drift", () => {
+    const desired: DesiredState = {
+      resources: [
+        {
+          resource: { type: "worker", id: "worker-1" },
+          attributes: {
+            script: "desired-script",
+          },
+        },
+      ],
+    };
+
+    const observed: ObservedState = {
+      resources: [
+        {
+          resource: { type: "worker", id: "worker-1" },
+          attributes: {
+            script: "actual-script",
+          },
+        },
+      ],
+    };
+
+    const diff = diffStates(desired, observed);
+
+    expect(diff.changes).toHaveLength(1);
+    expect(diff.changes[0]).toMatchObject({
+      type: "update",
+      desired: desired.resources[0],
+      observed: observed.resources[0],
+    });
+  });
+
+  it("retains strict attribute comparison for non-Worker resources", () => {
+    const desired: DesiredState = {
+      resources: [
+        {
+          resource: { type: "zone", id: "zone-1" },
+          attributes: {
+            name: "example.com",
+          },
+        },
+      ],
+    };
+
+    const observed: ObservedState = {
+      resources: [
+        {
+          resource: { type: "zone", id: "zone-1" },
+          attributes: {
+            name: "example.com",
+            providerOnlyMetadata: "extra",
+          },
+        },
+      ],
+    };
+
+    expect(diffStates(desired, observed).changes).toHaveLength(1);
+  });
 });

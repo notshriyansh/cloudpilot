@@ -9,6 +9,7 @@ function createMockProvider(): CloudflareProvider {
     listZones: vi.fn(),
     listDnsRecords: vi.fn(),
     listWorkers: vi.fn(),
+    getWorkerScript: vi.fn().mockResolvedValue("worker-script"),
     deployWorker: vi.fn(),
     deleteWorker: vi.fn(),
   };
@@ -142,8 +143,7 @@ describe("inventory", () => {
             id: "worker-1",
           },
           attributes: {
-            createdAt: "2026-09-01T10:00:00.000Z",
-            modifiedAt: "2026-09-10T12:00:00.000Z",
+            script: "worker-script",
             compatibilityDate: "2026-08-31",
           },
         },
@@ -154,6 +154,7 @@ describe("inventory", () => {
     expect(provider.listDnsRecords).toHaveBeenNthCalledWith(1, "zone-1");
     expect(provider.listDnsRecords).toHaveBeenNthCalledWith(2, "zone-2");
     expect(provider.listWorkers).toHaveBeenCalledTimes(1);
+    expect(provider.getWorkerScript).toHaveBeenCalledWith("worker-1");
   });
 
   it("returns an empty observed state when no zones or Workers exist", async () => {
@@ -286,8 +287,7 @@ describe("inventory", () => {
             id: "worker-1",
           },
           attributes: {
-            createdAt: "2026-09-01T10:00:00.000Z",
-            modifiedAt: "2026-09-10T12:00:00.000Z",
+            script: "worker-script",
             compatibilityDate: "2026-08-31",
           },
         },
@@ -296,13 +296,17 @@ describe("inventory", () => {
             type: "worker",
             id: "worker-2",
           },
-          attributes: {},
+          attributes: {
+            script: "worker-script",
+          },
         },
       ],
     });
 
     expect(provider.listWorkers).toHaveBeenCalledTimes(1);
     expect(provider.listDnsRecords).not.toHaveBeenCalled();
+    expect(provider.getWorkerScript).toHaveBeenNthCalledWith(1, "worker-1");
+    expect(provider.getWorkerScript).toHaveBeenNthCalledWith(2, "worker-2");
   });
 
   it("propagates provider errors", async () => {
@@ -330,6 +334,19 @@ describe("inventory", () => {
     ]);
 
     vi.mocked(provider.listDnsRecords).mockRejectedValue(error);
+
+    const inventory = createInventory(provider);
+
+    await expect(inventory.inspect()).rejects.toBe(error);
+  });
+
+  it("propagates Worker script retrieval errors", async () => {
+    const provider = createMockProvider();
+    const error = new Error("Worker script unavailable");
+
+    vi.mocked(provider.listZones).mockResolvedValue([]);
+    vi.mocked(provider.listWorkers).mockResolvedValue([{ id: "worker-1" }]);
+    vi.mocked(provider.getWorkerScript).mockRejectedValue(error);
 
     const inventory = createInventory(provider);
 

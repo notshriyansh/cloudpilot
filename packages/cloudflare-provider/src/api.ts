@@ -16,6 +16,8 @@ export interface CloudflareApiResponse<T> {
 export interface CloudflareApiClient {
   request<T>(path: string): Promise<CloudflareApiResponse<T>>;
 
+  getText(path: string): Promise<string>;
+
   putMultipart<T>(
     path: string,
     formData: FormData,
@@ -149,6 +151,54 @@ export function createCloudflareApiClient(
       return request<T>(path, {
         method: "GET",
       });
+    },
+
+    getText(path: string): Promise<string> {
+      return (async () => {
+        const response = await fetchImpl(`${API_BASE_URL}${path}`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${apiToken}`,
+            Accept: "*/*",
+          },
+        });
+
+        if (!response.ok) {
+          let body: unknown;
+
+          try {
+            body = await response.clone().json();
+          } catch {
+            throw new CloudflareProviderError(
+              `Cloudflare API returned an invalid response with status ${response.status}`,
+              response.status,
+            );
+          }
+
+          if (
+            typeof body === "object" &&
+            body !== null &&
+            "success" in body &&
+            body.success === false
+          ) {
+            const firstError = parseCloudflareErrors(body)[0];
+
+            throw new CloudflareProviderError(
+              firstError?.message ??
+                `Cloudflare API request failed with status ${response.status}`,
+              response.status,
+              firstError?.code,
+            );
+          }
+
+          throw new CloudflareProviderError(
+            `Cloudflare API returned an invalid response with status ${response.status}`,
+            response.status,
+          );
+        }
+
+        return response.text();
+      })();
     },
 
     putMultipart<T>(

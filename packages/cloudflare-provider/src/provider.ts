@@ -11,6 +11,7 @@ export interface CloudflareProvider {
   listZones(): Promise<CloudflareZone[]>;
   listDnsRecords(zoneId: string): Promise<CloudflareDnsRecord[]>;
   listWorkers(): Promise<CloudflareWorker[]>;
+  getWorkerScript(scriptName: string): Promise<string>;
 
   deployWorker(
     scriptName: string,
@@ -188,6 +189,12 @@ export function createCloudflareProvider(
             : {}),
         };
       });
+    },
+
+    async getWorkerScript(scriptName: string): Promise<string> {
+      return api.getText(
+        `/accounts/${encodeURIComponent(config.accountId)}/workers/scripts/${encodeURIComponent(scriptName)}`,
+      );
     },
 
     async deployWorker(
