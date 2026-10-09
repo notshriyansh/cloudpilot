@@ -48,6 +48,7 @@ import type { ReconciliationService } from "./reconciliation";
 import {
   createReconciliationService,
   NoDesiredStateError,
+  ReconciliationAlreadyRunningError,
 } from "./reconciliation-service";
 
 export interface App {
@@ -788,6 +789,10 @@ export async function handleRequest(
             status: 404,
           },
         );
+      }
+
+      if (error instanceof ReconciliationAlreadyRunningError) {
+        return Response.json({ error: error.message }, { status: 409 });
       }
 
       console.error("Reconciliation failed", error);

@@ -12,4 +12,5 @@ export interface ReconciliationRunStore {
   saveRun(run: ReconciliationRunRecord): Promise<void>;
   getRun(id: string): Promise<ReconciliationRunRecord | undefined>;
   getLatestRun(): Promise<ReconciliationRunRecord | undefined>;
+  startRun(run: ReconciliationRunRecord): Promise<boolean>;
 }

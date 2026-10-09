@@ -20,6 +20,13 @@ export class NoDesiredStateError extends Error {
   }
 }
 
+export class ReconciliationAlreadyRunningError extends Error {
+  constructor() {
+    super("A reconciliation is already running");
+    this.name = "ReconciliationAlreadyRunningError";
+  }
+}
+
 export function createReconciliationService(
   desiredStateStore: DesiredStateStore,
   observationService: ObservationService,
@@ -39,7 +46,11 @@ export function createReconciliationService(
         status: "running" as const,
       };
 
-      await reconciliationRunStore.saveRun(run);
+      const claimed = await reconciliationRunStore.startRun(run);
+
+      if (!claimed) {
+        throw new ReconciliationAlreadyRunningError();
+      }
 
       let result: ReconciliationResult;
 

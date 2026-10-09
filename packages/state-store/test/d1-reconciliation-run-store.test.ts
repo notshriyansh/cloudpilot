@@ -38,6 +38,44 @@ function createMockD1Database() {
 
         async run() {
           if (query.includes("INSERT INTO reconciliation_runs")) {
+            const isStartRunQuery = query.includes(
+              "ON CONFLICT(status) WHERE status = 'running'",
+            );
+
+            if (isStartRunQuery) {
+              const [id, startedAt] = values as [string, string];
+
+              const activeRun = [...rows.values()].find(
+                (row) => row.status === "running",
+              );
+
+              if (activeRun !== undefined) {
+                return {
+                  success: true,
+                  meta: { changes: 0 },
+                };
+              }
+
+              if (rows.has(id)) {
+                throw new Error(
+                  "UNIQUE constraint failed: reconciliation_runs.id",
+                );
+              }
+
+              rows.set(id, {
+                id,
+                started_at: startedAt,
+                completed_at: null,
+                status: "running",
+                result_json: null,
+              });
+
+              return {
+                success: true,
+                meta: { changes: 1 },
+              };
+            }
+
             const [id, startedAt, completedAt, status, resultJson] = values as [
               string,
               string,
@@ -55,14 +93,47 @@ function createMockD1Database() {
               status,
               result_json: resultJson,
             });
+
+            return {
+              success: true,
+              meta: { changes: 1 },
+            };
           }
 
-          return { success: true };
+          if (query.includes("UPDATE reconciliation_runs")) {
+            const [id, status] = values as [
+              string,
+              ReconciliationRunRecord["status"],
+            ];
+            const existing = rows.get(id);
+
+            if (existing !== undefined) {
+              rows.set(id, { ...existing, status });
+            }
+
+            return {
+              success: true,
+              meta: { changes: existing === undefined ? 0 : 1 },
+            };
+          }
+
+          return {
+            success: true,
+            meta: { changes: 0 },
+          };
         },
 
         async first<T>() {
           if (query.includes("WHERE id = ?")) {
             return (rows.get(String(values[0])) ?? null) as T | null;
+          }
+
+          if (query.includes("WHERE status = 'running'")) {
+            const activeRun = [...rows.values()].find(
+              (row) => row.status === "running",
+            );
+
+            return (activeRun ?? null) as T | null;
           }
 
           if (query.includes("ORDER BY started_at DESC")) {
@@ -83,6 +154,68 @@ function createMockD1Database() {
 
   return db as unknown as D1Database;
 }
+
+describe("D1ReconciliationRunStore.startRun", () => {
+  it("inserts a running record and returns true when the slot is free", async () => {
+    const store = createD1ReconciliationRunStore(createMockD1Database());
+    const run = createRun();
+
+    await expect(store.startRun(run)).resolves.toBe(true);
+    await expect(store.getRun(run.id)).resolves.toEqual(run);
+  });
+
+  it("returns false when another run is already running", async () => {
+    const store = createD1ReconciliationRunStore(createMockD1Database());
+    const first = createRun({ id: "run-1" });
+    const second = createRun({ id: "run-2" });
+
+    await expect(store.startRun(first)).resolves.toBe(true);
+    await expect(store.startRun(second)).resolves.toBe(false);
+
+    await expect(store.getRun("run-1")).resolves.toMatchObject({
+      status: "running",
+    });
+    await expect(store.getRun("run-2")).resolves.toBeUndefined();
+  });
+
+  it("allows a new run after the previous run becomes terminal", async () => {
+    const store = createD1ReconciliationRunStore(createMockD1Database());
+    const first = createRun({ id: "run-1" });
+
+    await expect(store.startRun(first)).resolves.toBe(true);
+
+    await store.saveRun({
+      ...first,
+      completedAt: "2026-10-09T10:00:05.000Z",
+      status: "succeeded",
+    });
+
+    const second = createRun({
+      id: "run-2",
+      startedAt: "2026-10-09T10:01:00.000Z",
+    });
+
+    await expect(store.startRun(second)).resolves.toBe(true);
+    await expect(store.getRun("run-2")).resolves.toEqual(second);
+  });
+
+  it("propagates an unrelated primary-key conflict", async () => {
+    const store = createD1ReconciliationRunStore(createMockD1Database());
+    const run = createRun();
+
+    await expect(store.startRun(run)).resolves.toBe(true);
+
+    await store.saveRun({
+      ...run,
+      completedAt: "2026-10-09T10:00:05.000Z",
+      status: "succeeded",
+    });
+
+    await expect(store.startRun(run)).rejects.toThrow(
+      "UNIQUE constraint failed: reconciliation_runs.id",
+    );
+  });
+});
 
 describe("D1ReconciliationRunStore", () => {
   it("returns undefined for a missing run", async () => {

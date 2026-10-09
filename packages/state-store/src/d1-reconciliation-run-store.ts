@@ -76,6 +76,25 @@ export function createD1ReconciliationRunStore(
 
       return row === null ? undefined : deserializeRun(row);
     },
+
+    async startRun(run): Promise<boolean> {
+      const result = await db
+        .prepare(
+          `INSERT INTO reconciliation_runs (
+        id,
+        started_at,
+        completed_at,
+        status,
+        result_json
+      ) VALUES (?, ?, NULL, 'running', NULL)
+      ON CONFLICT(status) WHERE status = 'running'
+      DO NOTHING`,
+        )
+        .bind(run.id, run.startedAt)
+        .run();
+
+      return (result.meta?.changes ?? 0) > 0;
+    },
   };
 }
 

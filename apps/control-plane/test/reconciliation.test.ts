@@ -19,6 +19,7 @@ import type { Clock, IdGenerator } from "../src/observation";
 import {
   createReconciliationService,
   NoDesiredStateError,
+  ReconciliationAlreadyRunningError,
 } from "../src/reconciliation-service";
 
 describe("ReconciliationService", () => {
@@ -433,35 +434,34 @@ describe("ReconciliationService", () => {
     });
   });
 
-  it("persists a running record before inspection and a succeeded terminal record", async () => {
+  it("claims the run before inspection and persists its terminal record", async () => {
     const { service, observationService, reconciliationRunStore } =
       createService();
 
+    const startRun = vi.spyOn(reconciliationRunStore, "startRun");
     const saveRun = vi.spyOn(reconciliationRunStore, "saveRun");
 
     const result = await service.reconcile();
 
     expect(result.status).toBe("verified");
-    expect(saveRun).toHaveBeenCalledTimes(2);
-
-    expect(saveRun.mock.calls[0][0]).toEqual({
+    expect(startRun).toHaveBeenCalledOnce();
+    expect(startRun).toHaveBeenCalledWith({
       id: "reconciliation-1",
       startedAt: "2026-10-09T10:00:00.000Z",
       status: "running",
     });
 
-    expect(saveRun.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(startRun.mock.invocationCallOrder[0]).toBeLessThan(
       observationService.inspect.mock.invocationCallOrder[0],
     );
 
-    expect(saveRun.mock.calls[1][0]).toMatchObject({
+    expect(saveRun).toHaveBeenCalledOnce();
+    expect(saveRun).toHaveBeenCalledWith({
       id: "reconciliation-1",
       startedAt: "2026-10-09T10:00:00.000Z",
       completedAt: "2026-10-09T10:00:00.000Z",
       status: "succeeded",
-      result: {
-        status: "verified",
-      },
+      result,
     });
 
     await expect(
@@ -591,27 +591,77 @@ describe("ReconciliationService", () => {
     });
   });
 
-  it("does not inspect infrastructure if the initial run record cannot be saved", async () => {
+  it("does not inspect infrastructure if claiming the run fails", async () => {
     const observationService = createObservationService();
 
+    const failure = new Error("Reconciliation storage unavailable");
+
     const reconciliationRunStore: ReconciliationRunStore = {
-      saveRun: vi
-        .fn()
-        .mockRejectedValue(new Error("Reconciliation storage unavailable")),
+      startRun: vi.fn().mockRejectedValue(failure),
+      saveRun: vi.fn(),
       getRun: vi.fn().mockResolvedValue(undefined),
       getLatestRun: vi.fn().mockResolvedValue(undefined),
     };
 
-    const { service } = createService({
+    const {
+      service,
+      planningService,
+      evaluationService,
+      executionService,
+      verificationService,
+    } = createService({
       observationService,
       reconciliationRunStore,
     });
 
-    await expect(service.reconcile()).rejects.toThrow(
-      "Reconciliation storage unavailable",
+    await expect(service.reconcile()).rejects.toBe(failure);
+
+    expect(reconciliationRunStore.startRun).toHaveBeenCalledOnce();
+    expect(reconciliationRunStore.saveRun).not.toHaveBeenCalled();
+
+    expect(observationService.inspect).not.toHaveBeenCalled();
+    expect(planningService.plan).not.toHaveBeenCalled();
+    expect(evaluationService.evaluate).not.toHaveBeenCalled();
+    expect(executionService.execute).not.toHaveBeenCalled();
+    expect(verificationService.verify).not.toHaveBeenCalled();
+  });
+
+  it("rejects a concurrent run without performing reconciliation work", async () => {
+    const observationService = createObservationService();
+
+    const reconciliationRunStore: ReconciliationRunStore = {
+      startRun: vi.fn().mockResolvedValue(false),
+      saveRun: vi.fn(),
+      getRun: vi.fn().mockResolvedValue(undefined),
+      getLatestRun: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const {
+      service,
+      planningService,
+      evaluationService,
+      executionService,
+      verificationService,
+    } = createService({
+      observationService,
+      reconciliationRunStore,
+    });
+
+    await expect(service.reconcile()).rejects.toBeInstanceOf(
+      ReconciliationAlreadyRunningError,
     );
 
-    expect(reconciliationRunStore.saveRun).toHaveBeenCalledOnce();
+    await expect(service.reconcile()).rejects.toMatchObject({
+      message: "A reconciliation is already running",
+    });
+
+    expect(reconciliationRunStore.startRun).toHaveBeenCalledTimes(2);
+    expect(reconciliationRunStore.saveRun).not.toHaveBeenCalled();
+
     expect(observationService.inspect).not.toHaveBeenCalled();
+    expect(planningService.plan).not.toHaveBeenCalled();
+    expect(evaluationService.evaluate).not.toHaveBeenCalled();
+    expect(executionService.execute).not.toHaveBeenCalled();
+    expect(verificationService.verify).not.toHaveBeenCalled();
   });
 });

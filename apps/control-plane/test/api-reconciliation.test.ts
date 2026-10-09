@@ -2,6 +2,7 @@ import { DesiredState } from "@cloudpilot/domain";
 import { describe, expect, it, vi } from "vitest";
 import { createApp } from "./helpers/app";
 import { handleRequest } from "../src/app";
+import { ReconciliationAlreadyRunningError } from "../src/reconciliation-service";
 
 describe("apiReconciliation", () => {
   it("returns 200 when POST /reconcile finds desired state already in sync", async () => {
@@ -104,5 +105,54 @@ describe("apiReconciliation", () => {
     );
 
     expect(response.status).toBe(409);
+  });
+
+  it("returns 409 when another reconciliation is already running", async () => {
+    const reconcile = vi
+      .fn()
+      .mockRejectedValue(new ReconciliationAlreadyRunningError());
+
+    const app = createApp({
+      reconciliationService: {
+        reconcile,
+      },
+    });
+
+    const response = await handleRequest(
+      new Request("https://example.com/reconcile", {
+        method: "POST",
+      }),
+      app,
+    );
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      error: "A reconciliation is already running",
+    });
+    expect(reconcile).toHaveBeenCalledOnce();
+  });
+
+  it("returns 500 when reconciliation fails with an unexpected error", async () => {
+    const reconcile = vi
+      .fn()
+      .mockRejectedValue(new Error("Reconciliation storage unavailable"));
+
+    const app = createApp({
+      reconciliationService: {
+        reconcile,
+      },
+    });
+
+    const response = await handleRequest(
+      new Request("https://example.com/reconcile", {
+        method: "POST",
+      }),
+      app,
+    );
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({
+      error: "Reconciliation failed",
+    });
   });
 });

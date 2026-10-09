@@ -8,7 +8,7 @@ export function createMemoryReconciliationRunStore(): ReconciliationRunStore {
 
   return {
     async saveRun(run) {
-      runs.set(run.id, run);
+      runs.set(run.id, { ...run });
     },
 
     async getRun(id) {
@@ -20,6 +20,19 @@ export function createMemoryReconciliationRunStore(): ReconciliationRunStore {
         (a, b) =>
           b.startedAt.localeCompare(a.startedAt) || b.id.localeCompare(a.id),
       )[0];
+    },
+
+    async startRun(run): Promise<boolean> {
+      const activeRun = [...runs.values()].some(
+        (existingRun) => existingRun.status === "running",
+      );
+
+      if (activeRun) {
+        return false;
+      }
+
+      runs.set(run.id, { ...run });
+      return true;
     },
   };
 }
