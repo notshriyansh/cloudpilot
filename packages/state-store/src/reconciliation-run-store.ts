@@ -1,4 +1,4 @@
-export type ReconciliationRunStatus = "running" | "succeeded" | "failed";
+export type ReconciliationRunStatus = "running" | "completed" | "failed";
 
 export interface ReconciliationRunRecord {
   id: string;

@@ -51,7 +51,7 @@ describe("startRun", () => {
     await store.saveRun({
       ...firstRun,
       completedAt: "2026-10-09T10:00:05.000Z",
-      status: "succeeded",
+      status: "completed",
     });
 
     await expect(
@@ -106,7 +106,7 @@ describe("MemoryReconciliationRunStore", () => {
 
     const completed = createRun({
       completedAt: "2026-10-09T10:00:05.000Z",
-      status: "succeeded",
+      status: "completed",
       result: {
         status: "verified",
         desired: { resources: [] },

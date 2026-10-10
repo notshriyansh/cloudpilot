@@ -77,7 +77,7 @@ export function createReconciliationService(
       await reconciliationRunStore.saveRun({
         ...run,
         completedAt: clock.now().toISOString(),
-        status: result.status === "failed" ? "failed" : "succeeded",
+        status: "completed",
         result,
       });
 

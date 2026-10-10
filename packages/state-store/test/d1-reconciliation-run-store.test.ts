@@ -187,7 +187,7 @@ describe("D1ReconciliationRunStore.startRun", () => {
     await store.saveRun({
       ...first,
       completedAt: "2026-10-09T10:00:05.000Z",
-      status: "succeeded",
+      status: "completed",
     });
 
     const second = createRun({
@@ -208,7 +208,7 @@ describe("D1ReconciliationRunStore.startRun", () => {
     await store.saveRun({
       ...run,
       completedAt: "2026-10-09T10:00:05.000Z",
-      status: "succeeded",
+      status: "completed",
     });
 
     await expect(store.startRun(run)).rejects.toThrow(
@@ -240,7 +240,7 @@ describe("D1ReconciliationRunStore", () => {
     const completed = createRun({
       startedAt: "2026-10-09T10:05:00.000Z",
       completedAt: "2026-10-09T10:00:05.000Z",
-      status: "succeeded",
+      status: "completed",
       result: { status: "verified" },
     });
 

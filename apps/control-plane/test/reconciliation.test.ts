@@ -376,9 +376,11 @@ describe("ReconciliationService", () => {
       } satisfies VerificationResult),
     };
 
-    const { service, executionService } = createService({
-      verificationService,
-    });
+    const { service, executionService, reconciliationRunStore } = createService(
+      {
+        verificationService,
+      },
+    );
 
     const result = await service.reconcile();
 
@@ -388,6 +390,15 @@ describe("ReconciliationService", () => {
 
     expect(executionService.execute).toHaveBeenCalledOnce();
     expect(verificationService.verify).toHaveBeenCalledOnce();
+
+    await expect(
+      reconciliationRunStore.getRun("reconciliation-1"),
+    ).resolves.toMatchObject({
+      status: "completed",
+      result: {
+        status: "mismatch",
+      },
+    });
   });
 
   it("returns failed when verification fails", async () => {
@@ -399,7 +410,7 @@ describe("ReconciliationService", () => {
       } satisfies VerificationResult),
     };
 
-    const { service } = createService({
+    const { service, reconciliationRunStore } = createService({
       verificationService,
     });
 
@@ -411,6 +422,15 @@ describe("ReconciliationService", () => {
       status: "failed",
       desired,
       error: "Inventory unavailable",
+    });
+
+    await expect(
+      reconciliationRunStore.getRun("reconciliation-1"),
+    ).resolves.toMatchObject({
+      status: "completed",
+      result: {
+        status: "failed",
+      },
     });
   });
 
@@ -440,7 +460,7 @@ describe("ReconciliationService", () => {
       id: "reconciliation-1",
       startedAt: "2026-10-09T10:00:00.000Z",
       completedAt: "2026-10-09T10:00:00.000Z",
-      status: "succeeded",
+      status: "completed",
       result,
     });
 
@@ -448,7 +468,7 @@ describe("ReconciliationService", () => {
       reconciliationRunStore.getRun("reconciliation-1"),
     ).resolves.toMatchObject({
       id: "reconciliation-1",
-      status: "succeeded",
+      status: "completed",
       result: {
         status: "verified",
       },
@@ -490,7 +510,7 @@ describe("ReconciliationService", () => {
     await expect(
       reconciliationRunStore.getRun("reconciliation-1"),
     ).resolves.toMatchObject({
-      status: "succeeded",
+      status: "completed",
       result: {
         status: "blocked",
       },
@@ -539,7 +559,7 @@ describe("ReconciliationService", () => {
     await expect(
       reconciliationRunStore.getRun("reconciliation-1"),
     ).resolves.toMatchObject({
-      status: "failed",
+      status: "completed",
       result: {
         status: "failed",
       },
