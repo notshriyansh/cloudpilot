@@ -26,6 +26,22 @@ export class ReconciliationAlreadyRunningError extends Error {
   }
 }
 
+export class ReconciliationRunPersistenceError extends Error {
+  readonly persistenceError: unknown;
+  readonly workflowError: unknown;
+
+  constructor(
+    message: string,
+    persistenceError: unknown,
+    workflowError?: unknown,
+  ) {
+    super(message);
+    this.name = "ReconciliationRunPersistenceError";
+    this.persistenceError = persistenceError;
+    this.workflowError = workflowError;
+  }
+}
+
 export function createReconciliationService(
   desiredStateStore: DesiredStateStore,
   observationService: ObservationService,
@@ -60,26 +76,44 @@ export function createReconciliationService(
           executionService,
           verificationService,
         );
-      } catch (error) {
+      } catch (workflowError) {
+        try {
+          await reconciliationRunStore.saveRun({
+            ...run,
+            completedAt: clock.now().toISOString(),
+            status: "failed",
+            result: {
+              status: "failed",
+              error:
+                workflowError instanceof Error
+                  ? workflowError.message
+                  : String(workflowError),
+            },
+          });
+        } catch (persistenceError) {
+          throw new ReconciliationRunPersistenceError(
+            "Reconciliation failed and its failure record could not be persisted; the run may remain marked as running.",
+            persistenceError,
+            workflowError,
+          );
+        }
+
+        throw workflowError;
+      }
+
+      try {
         await reconciliationRunStore.saveRun({
           ...run,
           completedAt: clock.now().toISOString(),
-          status: "failed",
-          result: {
-            status: "failed",
-            error: error instanceof Error ? error.message : String(error),
-          },
+          status: "completed",
+          result,
         });
-
-        throw error;
+      } catch (persistenceError) {
+        throw new ReconciliationRunPersistenceError(
+          "Reconciliation produced a result, but its terminal record could not be persisted; the run may remain marked as running.",
+          persistenceError,
+        );
       }
-
-      await reconciliationRunStore.saveRun({
-        ...run,
-        completedAt: clock.now().toISOString(),
-        status: "completed",
-        result,
-      });
 
       return result;
     },

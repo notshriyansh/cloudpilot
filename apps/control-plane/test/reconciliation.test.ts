@@ -20,6 +20,7 @@ import {
   createReconciliationService,
   NoDesiredStateError,
   ReconciliationAlreadyRunningError,
+  ReconciliationRunPersistenceError,
 } from "../src/reconciliation-service";
 
 describe("ReconciliationService", () => {
@@ -588,6 +589,63 @@ describe("ReconciliationService", () => {
         status: "failed",
         error: "Inventory unavailable",
       },
+    });
+  });
+
+  it("does not return a result when terminal persistence fails", async () => {
+    const { service, reconciliationRunStore } = createService();
+
+    const persistenceError = new Error("D1 unavailable");
+
+    const saveRun = vi
+      .spyOn(reconciliationRunStore, "saveRun")
+      .mockRejectedValue(persistenceError);
+
+    await expect(service.reconcile()).rejects.toMatchObject({
+      name: "ReconciliationRunPersistenceError",
+      message:
+        "Reconciliation produced a result, but its terminal record could not be persisted; the run may remain marked as running.",
+      persistenceError,
+    });
+
+    expect(saveRun).toHaveBeenCalledOnce();
+
+    await expect(
+      reconciliationRunStore.getRun("reconciliation-1"),
+    ).resolves.toMatchObject({
+      status: "running",
+    });
+  });
+
+  it("preserves the workflow error when persisting failure also fails", async () => {
+    const workflowError = new Error("Inventory unavailable");
+    const persistenceError = new Error("D1 unavailable");
+
+    const observationService = {
+      inspect: vi.fn().mockRejectedValue(workflowError),
+      getLatest: vi.fn(),
+    };
+
+    const { service, reconciliationRunStore } = createService({
+      observationService,
+    });
+
+    const saveRun = vi
+      .spyOn(reconciliationRunStore, "saveRun")
+      .mockRejectedValue(persistenceError);
+
+    await expect(service.reconcile()).rejects.toMatchObject({
+      name: "ReconciliationRunPersistenceError",
+      persistenceError,
+      workflowError,
+    });
+
+    expect(saveRun).toHaveBeenCalledOnce();
+
+    await expect(
+      reconciliationRunStore.getRun("reconciliation-1"),
+    ).resolves.toMatchObject({
+      status: "running",
     });
   });
 
