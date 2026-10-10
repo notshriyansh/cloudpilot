@@ -4,7 +4,6 @@ import type {
   ReconciliationRunStore,
 } from "@cloudpilot/state-store";
 import type { Clock, IdGenerator, ObservationService } from "./observation";
-import type { PlanningService } from "./planning";
 import type { EvaluationService } from "./evaluation";
 import type { ExecutionService } from "./execution";
 import type { VerificationService } from "./verification";
@@ -30,7 +29,6 @@ export class ReconciliationAlreadyRunningError extends Error {
 export function createReconciliationService(
   desiredStateStore: DesiredStateStore,
   observationService: ObservationService,
-  planningService: PlanningService,
   evaluationService: EvaluationService,
   executionService: ExecutionService,
   verificationService: VerificationService,
@@ -58,7 +56,6 @@ export function createReconciliationService(
         result = await performReconciliation(
           desiredStateStore,
           observationService,
-          planningService,
           evaluationService,
           executionService,
           verificationService,
@@ -92,7 +89,6 @@ export function createReconciliationService(
 async function performReconciliation(
   desiredStateStore: DesiredStateStore,
   observationService: ObservationService,
-  planningService: PlanningService,
   evaluationService: EvaluationService,
   executionService: ExecutionService,
   verificationService: VerificationService,
@@ -110,8 +106,11 @@ async function performReconciliation(
     return { status: "in_sync", desired };
   }
 
-  const plan = await planningService.plan(desired);
   const evaluation = await evaluationService.evaluate(desired);
+
+  const plan = {
+    operations: evaluation.operations.map(({ operation }) => operation),
+  };
 
   const blockedOperations = evaluation.operations.filter(
     (operation) => operation.readiness === "blocked",

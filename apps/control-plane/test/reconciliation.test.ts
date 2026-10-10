@@ -112,12 +112,6 @@ describe("ReconciliationService", () => {
     };
   }
 
-  function createPlanningService() {
-    return {
-      plan: vi.fn().mockResolvedValue(plan),
-    };
-  }
-
   function createEvaluationService() {
     return {
       evaluate: vi.fn().mockResolvedValue({
@@ -165,7 +159,6 @@ describe("ReconciliationService", () => {
   function createService(overrides?: {
     desiredStateStore?: DesiredStateStore;
     observationService?: ReturnType<typeof createObservationService>;
-    planningService?: ReturnType<typeof createPlanningService>;
     evaluationService?: ReturnType<typeof createEvaluationService>;
     executionService?: ReturnType<typeof createExecutionService>;
     verificationService?: ReturnType<typeof createVerificationService>;
@@ -178,9 +171,6 @@ describe("ReconciliationService", () => {
 
     const observationService =
       overrides?.observationService ?? createObservationService();
-
-    const planningService =
-      overrides?.planningService ?? createPlanningService();
 
     const evaluationService =
       overrides?.evaluationService ?? createEvaluationService();
@@ -205,7 +195,6 @@ describe("ReconciliationService", () => {
     const service = createReconciliationService(
       desiredStateStore,
       observationService,
-      planningService,
       evaluationService,
       executionService,
       verificationService,
@@ -218,7 +207,6 @@ describe("ReconciliationService", () => {
       service,
       desiredStateStore,
       observationService,
-      planningService,
       evaluationService,
       executionService,
       verificationService,
@@ -233,7 +221,6 @@ describe("ReconciliationService", () => {
 
     const {
       service,
-      planningService,
       evaluationService,
       executionService,
       verificationService,
@@ -249,7 +236,6 @@ describe("ReconciliationService", () => {
     });
 
     expect(observationService.inspect).toHaveBeenCalledOnce();
-    expect(planningService.plan).not.toHaveBeenCalled();
     expect(evaluationService.evaluate).not.toHaveBeenCalled();
     expect(executionService.execute).not.toHaveBeenCalled();
     expect(verificationService.verify).not.toHaveBeenCalled();
@@ -270,11 +256,10 @@ describe("ReconciliationService", () => {
     expect(observationService.inspect).not.toHaveBeenCalled();
   });
 
-  it("plans, evaluates, executes, and verifies when drift exists", async () => {
+  it("evaluates, executes, and verifies when drift exists", async () => {
     const {
       service,
       observationService,
-      planningService,
       evaluationService,
       executionService,
       verificationService,
@@ -289,9 +274,6 @@ describe("ReconciliationService", () => {
     expect(result.verification?.status).toBe("verified");
 
     expect(observationService.inspect).toHaveBeenCalledOnce();
-
-    expect(planningService.plan).toHaveBeenCalledOnce();
-    expect(planningService.plan).toHaveBeenCalledWith(desired);
 
     expect(evaluationService.evaluate).toHaveBeenCalledOnce();
 
@@ -326,17 +308,15 @@ describe("ReconciliationService", () => {
       }),
     };
 
-    const { service, planningService, executionService, verificationService } =
-      createService({
-        evaluationService,
-      });
+    const { service, executionService, verificationService } = createService({
+      evaluationService,
+    });
 
     const result = await service.reconcile();
 
     expect(result.status).toBe("blocked");
     expect(result.plan).toEqual(plan);
 
-    expect(planningService.plan).toHaveBeenCalledOnce();
     expect(executionService.execute).not.toHaveBeenCalled();
     expect(verificationService.verify).not.toHaveBeenCalled();
   });
@@ -605,7 +585,6 @@ describe("ReconciliationService", () => {
 
     const {
       service,
-      planningService,
       evaluationService,
       executionService,
       verificationService,
@@ -620,7 +599,6 @@ describe("ReconciliationService", () => {
     expect(reconciliationRunStore.saveRun).not.toHaveBeenCalled();
 
     expect(observationService.inspect).not.toHaveBeenCalled();
-    expect(planningService.plan).not.toHaveBeenCalled();
     expect(evaluationService.evaluate).not.toHaveBeenCalled();
     expect(executionService.execute).not.toHaveBeenCalled();
     expect(verificationService.verify).not.toHaveBeenCalled();
@@ -638,7 +616,6 @@ describe("ReconciliationService", () => {
 
     const {
       service,
-      planningService,
       evaluationService,
       executionService,
       verificationService,
@@ -659,7 +636,6 @@ describe("ReconciliationService", () => {
     expect(reconciliationRunStore.saveRun).not.toHaveBeenCalled();
 
     expect(observationService.inspect).not.toHaveBeenCalled();
-    expect(planningService.plan).not.toHaveBeenCalled();
     expect(evaluationService.evaluate).not.toHaveBeenCalled();
     expect(executionService.execute).not.toHaveBeenCalled();
     expect(verificationService.verify).not.toHaveBeenCalled();

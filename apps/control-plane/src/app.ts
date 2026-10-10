@@ -114,7 +114,6 @@ export function createApp(dependencies: AppDependencies): App {
   const reconciliationService = createReconciliationService(
     dependencies.desiredStateStore,
     observationService,
-    planningService,
     evaluationService,
     executionService,
     verificationService,
@@ -571,7 +570,9 @@ export async function handleRequest(
         );
       }
 
-      const plan = await app.planningService.plan(result.state!);
+      const plan = {
+        operations: evaluatedPlan.operations.map(({ operation }) => operation),
+      };
 
       const executionId = crypto.randomUUID();
       const startedAt = new Date().toISOString();

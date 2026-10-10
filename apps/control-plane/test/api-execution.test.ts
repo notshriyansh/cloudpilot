@@ -5,7 +5,7 @@ import { handleRequest } from "../src/app";
 import { NoObservationError } from "../src/planning";
 
 describe("apiExecution", () => {
-  it("plans and executes desired state for POST /execute", async () => {
+  it("executes the evaluated plan for POST /execute", async () => {
     const desired: DesiredState = {
       resources: [
         {
@@ -153,8 +153,7 @@ export default {
     expect(evaluate).toHaveBeenCalledOnce();
     expect(evaluate).toHaveBeenCalledWith(desired);
 
-    expect(planning).toHaveBeenCalledOnce();
-    expect(planning).toHaveBeenCalledWith(desired);
+    expect(planning).not.toHaveBeenCalled();
 
     expect(execute).toHaveBeenCalledOnce();
     expect(execute).toHaveBeenCalledWith(plan);
@@ -266,7 +265,6 @@ export default {
   });
 
   it("returns 404 when executing without an observation", async () => {
-    const planning = vi.fn().mockRejectedValue(new NoObservationError());
     const execute = vi.fn();
     const executionStore = createFakeExecutionStore();
 
@@ -364,6 +362,7 @@ export default {
     );
 
     expect(response.status).toBe(500);
+    expect(planning).not.toHaveBeenCalled();
 
     await expect(response.json()).resolves.toEqual({
       error: "Execution failed",
