@@ -45,4 +45,29 @@ describe("CloudPilot control plane", () => {
     expect(response.status).toBe(404);
     expect(await response.text()).toBe("Not Found");
   });
+
+  it("rejects unauthenticated MCP requests", async () => {
+    const response = await SELF.fetch("https://example.com/mcp", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-03-26",
+          capabilities: {},
+          clientInfo: {
+            name: "cloudpilot-test",
+            version: "1.0.0",
+          },
+        },
+      }),
+    });
+
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: "Unauthorized" });
+  });
 });
