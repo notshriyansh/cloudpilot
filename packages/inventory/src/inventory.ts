@@ -28,9 +28,7 @@ export function createInventory(provider: CloudflareProvider): Inventory {
       const workers = await provider.listWorkers();
 
       for (const worker of workers) {
-        const script = await provider.getWorkerScript(worker.id);
-
-        resources.push(cloudflareWorkerToResource(worker, script));
+        resources.push(cloudflareWorkerToResource(worker));
       }
 
       return {

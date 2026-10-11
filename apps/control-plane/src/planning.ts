@@ -4,6 +4,12 @@ import {
   type Plan,
 } from "@cloudpilot/domain";
 import type { ManagementScopeStore, StateStore } from "@cloudpilot/state-store";
+import {
+  findWorkerScriptDrift,
+  markWorkerScriptDrift,
+  withoutWorkerScripts,
+  type WorkerScriptReader,
+} from "./worker-script-drift";
 
 export interface PlanningService {
   plan(desired: DesiredState): Promise<Plan>;
@@ -12,6 +18,7 @@ export interface PlanningService {
 export function createPlanningService(
   stateStore: StateStore,
   managementScopeStore: ManagementScopeStore,
+  readWorkerScript: WorkerScriptReader,
 ): PlanningService {
   return {
     async plan(desired: DesiredState): Promise<Plan> {
@@ -22,8 +29,17 @@ export function createPlanningService(
       }
 
       const scope = await managementScopeStore.getScope();
+      const observed = withoutWorkerScripts(observation.state);
 
-      return createPlanFromStates(desired, observation.state, scope);
+      const driftedKeys = await findWorkerScriptDrift(
+        desired,
+        observed,
+        readWorkerScript,
+      );
+
+      const planningState = markWorkerScriptDrift(observed, driftedKeys);
+
+      return createPlanFromStates(desired, planningState, scope);
     },
   };
 }

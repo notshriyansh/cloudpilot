@@ -166,6 +166,7 @@ describe("ReconciliationService", () => {
     reconciliationRunStore?: ReconciliationRunStore;
     clock?: Clock;
     idGenerator?: IdGenerator;
+    readWorkerScript?: (scriptName: string) => Promise<string>;
   }) {
     const desiredStateStore =
       overrides?.desiredStateStore ?? createDesiredStateStore();
@@ -193,6 +194,10 @@ describe("ReconciliationService", () => {
       generate: () => "reconciliation-1",
     };
 
+    const readWorkerScript =
+      overrides?.readWorkerScript ??
+      vi.fn().mockResolvedValue("old-worker-script");
+
     const service = createReconciliationService(
       desiredStateStore,
       observationService,
@@ -202,6 +207,7 @@ describe("ReconciliationService", () => {
       reconciliationRunStore,
       clock,
       idGenerator,
+      readWorkerScript,
     );
 
     return {
@@ -227,6 +233,7 @@ describe("ReconciliationService", () => {
       verificationService,
     } = createService({
       observationService,
+      readWorkerScript: vi.fn().mockResolvedValue("worker-script"),
     });
 
     const result = await service.reconcile();

@@ -45,3 +45,4 @@ export * from "./plan-executor";
 export * from "./execution-service";
 export { createDefaultPolicy } from "./policy";
 export * from "./verification";
+export { resourceIdKey } from "./state";

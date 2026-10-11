@@ -11,6 +11,12 @@ import type {
   ReconciliationResult,
   ReconciliationService,
 } from "./reconciliation";
+import {
+  findWorkerScriptDrift,
+  markWorkerScriptDrift,
+  withoutWorkerScripts,
+  type WorkerScriptReader,
+} from "./worker-script-drift";
 
 export class NoDesiredStateError extends Error {
   constructor() {
@@ -51,6 +57,7 @@ export function createReconciliationService(
   reconciliationRunStore: ReconciliationRunStore,
   clock: Clock,
   idGenerator: IdGenerator,
+  readWorkerScript: WorkerScriptReader,
 ): ReconciliationService {
   return {
     async reconcile() {
@@ -75,6 +82,7 @@ export function createReconciliationService(
           evaluationService,
           executionService,
           verificationService,
+          readWorkerScript,
         );
       } catch (workflowError) {
         try {
@@ -126,6 +134,7 @@ async function performReconciliation(
   evaluationService: EvaluationService,
   executionService: ExecutionService,
   verificationService: VerificationService,
+  readWorkerScript: WorkerScriptReader,
 ): Promise<ReconciliationResult> {
   const desired = await desiredStateStore.getDesiredState();
 
@@ -134,11 +143,19 @@ async function performReconciliation(
   }
 
   const observation = await observationService.inspect();
-  const diff = diffStates(desired, observation.state);
+  const observedState = withoutWorkerScripts(observation.state);
+  const diff = diffStates(desired, observedState);
 
-  if (diff.changes.length === 0) {
+  const driftedKeys =
+    diff.changes.length === 0
+      ? await findWorkerScriptDrift(desired, observedState, readWorkerScript)
+      : new Set<string>();
+
+  if (diff.changes.length === 0 && driftedKeys.size === 0) {
     return { status: "in_sync", desired };
   }
+
+  const evaluationState = markWorkerScriptDrift(observedState, driftedKeys);
 
   const evaluation = await evaluationService.evaluate(desired);
 

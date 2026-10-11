@@ -31,6 +31,7 @@ import { createManagementService, type ManagementService } from "./management";
 import { parseManagementResource } from "./management-request";
 import { parseManagementResourcePath } from "./management-resource-path";
 import { createExecutionService, type ExecutionService } from "./execution";
+import type { WorkerScriptReader } from "./worker-script-drift";
 import {
   createDefaultApprovalEvaluator,
   createDefaultPolicy,
@@ -75,6 +76,7 @@ export interface AppDependencies {
   idGenerator: IdGenerator;
   managementScopeStore: ManagementScopeStore;
   operationExecutor: OperationExecutor;
+  getWorkerScript: WorkerScriptReader;
 }
 
 export function createApp(dependencies: AppDependencies): App {
@@ -88,6 +90,7 @@ export function createApp(dependencies: AppDependencies): App {
   const planningService = createPlanningService(
     dependencies.stateStore,
     dependencies.managementScopeStore,
+    dependencies.getWorkerScript,
   );
 
   const managementService = createManagementService(
@@ -109,7 +112,10 @@ export function createApp(dependencies: AppDependencies): App {
     planEvaluator,
   );
 
-  const verificationService = createVerificationService(observationService);
+  const verificationService = createVerificationService(
+    observationService,
+    dependencies.getWorkerScript,
+  );
 
   const reconciliationService = createReconciliationService(
     dependencies.desiredStateStore,
@@ -120,6 +126,7 @@ export function createApp(dependencies: AppDependencies): App {
     dependencies.reconciliationRunStore,
     dependencies.clock,
     dependencies.idGenerator,
+    dependencies.getWorkerScript,
   );
 
   return {
@@ -167,6 +174,7 @@ export function createProductionApp(env: Env) {
     },
     managementScopeStore,
     operationExecutor,
+    getWorkerScript: (scriptName) => provider.getWorkerScript(scriptName),
   });
 }
 

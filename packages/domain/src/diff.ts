@@ -26,6 +26,13 @@ function workerAttributesEqual(
   observed: Record<string, unknown>,
 ): boolean {
   return Object.entries(desired).every(([key, value]) => {
+    if (
+      key === "script" &&
+      !Object.prototype.hasOwnProperty.call(observed, key)
+    ) {
+      return true;
+    }
+
     return (
       Object.prototype.hasOwnProperty.call(observed, key) &&
       areValuesEqual(value, observed[key])

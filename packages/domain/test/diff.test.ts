@@ -474,4 +474,65 @@ describe("diffStates", () => {
 
     expect(diffStates(desired, observed).changes).toHaveLength(1);
   });
+
+  it("does not report Worker script drift when observed script is unknown", () => {
+    const desired: DesiredState = {
+      resources: [
+        {
+          resource: { type: "worker", id: "worker-1" },
+          attributes: {
+            script: "desired-script",
+            compatibilityDate: "2026-08-31",
+          },
+        },
+      ],
+    };
+
+    const observed: ObservedState = {
+      resources: [
+        {
+          resource: { type: "worker", id: "worker-1" },
+          attributes: {
+            compatibilityDate: "2026-08-31",
+          },
+        },
+      ],
+    };
+
+    expect(diffStates(desired, observed)).toEqual({ changes: [] });
+  });
+
+  it("detects Worker compatibility-date drift when the script is unknown", () => {
+    const desired: DesiredState = {
+      resources: [
+        {
+          resource: { type: "worker", id: "worker-1" },
+          attributes: {
+            script: "desired-script",
+            compatibilityDate: "2026-08-31",
+          },
+        },
+      ],
+    };
+
+    const observed: ObservedState = {
+      resources: [
+        {
+          resource: { type: "worker", id: "worker-1" },
+          attributes: {
+            compatibilityDate: "2026-09-01",
+          },
+        },
+      ],
+    };
+
+    const diff = diffStates(desired, observed);
+
+    expect(diff.changes).toHaveLength(1);
+    expect(diff.changes[0]).toMatchObject({
+      type: "update",
+      desired: desired.resources[0],
+      observed: observed.resources[0],
+    });
+  });
 });

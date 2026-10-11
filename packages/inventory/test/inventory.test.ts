@@ -143,7 +143,6 @@ describe("inventory", () => {
             id: "worker-1",
           },
           attributes: {
-            script: "worker-script",
             compatibilityDate: "2026-08-31",
           },
         },
@@ -154,7 +153,7 @@ describe("inventory", () => {
     expect(provider.listDnsRecords).toHaveBeenNthCalledWith(1, "zone-1");
     expect(provider.listDnsRecords).toHaveBeenNthCalledWith(2, "zone-2");
     expect(provider.listWorkers).toHaveBeenCalledTimes(1);
-    expect(provider.getWorkerScript).toHaveBeenCalledWith("worker-1");
+    expect(provider.getWorkerScript).not.toHaveBeenCalled();
   });
 
   it("returns an empty observed state when no zones or Workers exist", async () => {
@@ -171,6 +170,7 @@ describe("inventory", () => {
 
     expect(provider.listDnsRecords).not.toHaveBeenCalled();
     expect(provider.listWorkers).toHaveBeenCalledTimes(1);
+    expect(provider.getWorkerScript).not.toHaveBeenCalled();
   });
 
   it("lists DNS records for each zone and preserves their relationships", async () => {
@@ -218,7 +218,6 @@ describe("inventory", () => {
     vi.mocked(provider.listWorkers).mockResolvedValue([]);
 
     const inventory = createInventory(provider);
-
     const observed = await inventory.inspect();
 
     expect(provider.listDnsRecords).toHaveBeenNthCalledWith(1, "zone-1");
@@ -258,9 +257,11 @@ describe("inventory", () => {
         }),
       ]),
     );
+
+    expect(provider.getWorkerScript).not.toHaveBeenCalled();
   });
 
-  it("lists and maps Workers into observed state", async () => {
+  it("lists and maps Workers into metadata-only observed state", async () => {
     const provider = createMockProvider();
 
     vi.mocked(provider.listZones).mockResolvedValue([]);
@@ -287,7 +288,6 @@ describe("inventory", () => {
             id: "worker-1",
           },
           attributes: {
-            script: "worker-script",
             compatibilityDate: "2026-08-31",
           },
         },
@@ -296,17 +296,14 @@ describe("inventory", () => {
             type: "worker",
             id: "worker-2",
           },
-          attributes: {
-            script: "worker-script",
-          },
+          attributes: {},
         },
       ],
     });
 
     expect(provider.listWorkers).toHaveBeenCalledTimes(1);
     expect(provider.listDnsRecords).not.toHaveBeenCalled();
-    expect(provider.getWorkerScript).toHaveBeenNthCalledWith(1, "worker-1");
-    expect(provider.getWorkerScript).toHaveBeenNthCalledWith(2, "worker-2");
+    expect(provider.getWorkerScript).not.toHaveBeenCalled();
   });
 
   it("propagates provider errors", async () => {
@@ -340,16 +337,19 @@ describe("inventory", () => {
     await expect(inventory.inspect()).rejects.toBe(error);
   });
 
-  it("propagates Worker script retrieval errors", async () => {
+  it("does not retrieve Worker scripts during inspection", async () => {
     const provider = createMockProvider();
-    const error = new Error("Worker script unavailable");
 
     vi.mocked(provider.listZones).mockResolvedValue([]);
-    vi.mocked(provider.listWorkers).mockResolvedValue([{ id: "worker-1" }]);
-    vi.mocked(provider.getWorkerScript).mockRejectedValue(error);
+    vi.mocked(provider.listWorkers).mockResolvedValue([
+      { id: "worker-1" },
+      { id: "worker-2" },
+    ]);
 
     const inventory = createInventory(provider);
+    const observed = await inventory.inspect();
 
-    await expect(inventory.inspect()).rejects.toBe(error);
+    expect(observed.resources).toHaveLength(2);
+    expect(provider.getWorkerScript).not.toHaveBeenCalled();
   });
 });
