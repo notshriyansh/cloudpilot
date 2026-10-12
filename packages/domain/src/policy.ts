@@ -18,10 +18,14 @@ export interface Policy {
 export function createDefaultPolicy(): Policy {
   return {
     evaluate(operation, _context) {
-      if (operation.action === "delete" && operation.resource.type === "zone") {
+      if (
+        operation.action === "delete" &&
+        (operation.resource.type === "zone" ||
+          operation.resource.type === "worker")
+      ) {
         return {
           action: "deny",
-          reason: "Deleting zones is not permitted by the default policy",
+          reason: `Deleting ${operation.resource.type}s is not permitted by the default policy`,
         };
       }
 

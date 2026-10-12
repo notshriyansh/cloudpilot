@@ -61,7 +61,7 @@ describe("default policy", () => {
     });
   });
 
-  it("allows deleting a worker", () => {
+  it("denies deleting a worker", () => {
     const operation: PlanOperation = {
       action: "delete",
       resource: {
@@ -72,8 +72,8 @@ describe("default policy", () => {
     };
 
     expect(policy.evaluate(operation, context)).toEqual({
-      action: "allow",
-      reason: "Operation is permitted by the default policy",
+      action: "deny",
+      reason: "Deleting workers is not permitted by the default policy",
     });
   });
 
