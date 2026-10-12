@@ -39,7 +39,14 @@ export function createCloudPilotMcpServer(app: App) {
       try {
         const observation = await app.observationService.inspect();
         return jsonResult(observation);
-      } catch {
+      } catch (error) {
+        console.error(
+          "MCP infrastructure inspection failed:",
+          error instanceof Error
+            ? { name: error.name, message: error.message }
+            : "Unknown error",
+        );
+
         return errorResult("Infrastructure inspection failed.");
       }
     },

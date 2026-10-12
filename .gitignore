@@ -63,3 +63,6 @@ Desktop.ini
 *.bak
 *.orig
 *~
+
+.secrets/
+armoriq.yaml

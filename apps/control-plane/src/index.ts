@@ -16,7 +16,34 @@ export default {
       const app = createProductionApp(env);
       const handler = createCloudPilotMcpHandler(app);
 
-      return handler(request, env, ctx);
+      let mcpRequest = request;
+
+      try {
+        const body: unknown = await request.clone().json();
+
+        if (
+          typeof body === "object" &&
+          body !== null &&
+          !Array.isArray(body) &&
+          "_iam_context" in body
+        ) {
+          const { _iam_context: _iamContext, ...jsonRpcBody } = body as Record<
+            string,
+            unknown
+          >;
+
+          const headers = new Headers(request.headers);
+          headers.delete("content-length");
+
+          mcpRequest = new Request(request.url, {
+            method: request.method,
+            headers,
+            body: JSON.stringify(jsonRpcBody),
+          });
+        }
+      } catch {}
+
+      return handler(mcpRequest, env, ctx);
     }
 
     const authorization = authorizeBearer(request, env.CLOUDPILOT_API_TOKEN);
