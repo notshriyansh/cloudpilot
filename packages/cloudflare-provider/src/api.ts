@@ -197,7 +197,49 @@ export function createCloudflareApiClient(
           );
         }
 
-        return response.text();
+        const contentType = response.headers.get("content-type") ?? "";
+
+        if (!contentType.toLowerCase().startsWith("multipart/form-data")) {
+          return response.text();
+        }
+
+        const boundaryMatch = contentType.match(
+          /boundary=(?:"([^"]+)"|([^;]+))/i,
+        );
+        const boundary = boundaryMatch?.[1] ?? boundaryMatch?.[2]?.trim();
+
+        if (!boundary) {
+          throw new CloudflareProviderError(
+            "Cloudflare API returned multipart Worker script content without a boundary",
+            response.status,
+          );
+        }
+
+        const body = await response.text();
+        const parts = body.split(`--${boundary}`);
+
+        for (const part of parts) {
+          const separator = part.indexOf("\r\n\r\n");
+          if (separator === -1) {
+            continue;
+          }
+
+          const headers = part.slice(0, separator);
+          const content = part.slice(separator + 4).replace(/\r\n$/, "");
+
+          if (
+            /content-disposition:\s*form-data;[^\\r\\n]*name="index\.js"/i.test(
+              headers,
+            )
+          ) {
+            return content;
+          }
+        }
+
+        throw new CloudflareProviderError(
+          "Cloudflare API multipart response did not contain the index.js Worker script",
+          response.status,
+        );
       })();
     },
 

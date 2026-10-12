@@ -70,6 +70,49 @@ def main():
         except Exception as exc:
             print("DENY TEST:", type(exc).__name__, str(exc))
 
+        
+        update_params = {
+            "script": (
+                'export default { fetch() { '
+                'return new Response("CloudPilot disposable worker v2"); '
+                '} };'
+            ),
+            "compatibilityDate": "2026-08-31",
+        }
+
+        update_plan = client.capture_plan(
+            llm="cloudpilot-smoke-test",
+            prompt="Update the dedicated CloudPilot disposable test Worker.",
+            plan={
+                "goal": "Update the disposable test Worker",
+                "steps": [
+                    {
+                        "action": "update_disposable_worker",
+                        "mcp": "cloudpilot",
+                        "params": update_params,
+                    }
+                ],
+            },
+        )
+
+        update_token = client.get_intent_token(
+            update_plan,
+            validity_seconds=300,
+        )
+
+        try:
+            result = client.invoke(
+                mcp="cloudpilot",
+                action="update_disposable_worker",
+                intent_token=update_token,
+                params=update_params,
+            )
+            print("UPDATE TEST STATUS:", result.status)
+            print("UPDATE TEST RESULT:", repr(result))
+        except Exception as exc:
+            print("UPDATE DENY TEST:", type(exc).__name__, str(exc))
+
+
     finally:
         client.close()
 

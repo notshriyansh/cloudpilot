@@ -1194,4 +1194,39 @@ describe("CloudflareProvider", () => {
       code: 10001,
     });
   });
+
+  it("extracts Worker script content from a multipart response", async () => {
+    const boundary = "worker-script-boundary";
+    const script =
+      'export default { fetch() { return new Response("hello"); } };';
+
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        [
+          `--${boundary}`,
+          'Content-Disposition: form-data; name="index.js"',
+          "",
+          script,
+          `--${boundary}--`,
+          "",
+        ].join("\r\n"),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": `multipart/form-data; boundary=${boundary}`,
+          },
+        },
+      ),
+    );
+
+    const provider = createCloudflareProvider(
+      {
+        accountId: "account-123",
+        apiToken: "test-token",
+      },
+      fetchMock,
+    );
+
+    await expect(provider.getWorkerScript("api-worker")).resolves.toBe(script);
+  });
 });
