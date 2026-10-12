@@ -4,25 +4,226 @@ import { z } from "zod";
 import type { App } from "./app";
 import { parseDesiredState } from "./desired-state";
 
-function jsonResult(value: unknown) {
+type McpToolResult = {
+  content: Array<{
+    type: "text";
+    text: string;
+  }>;
+  isError?: boolean;
+};
+
+function jsonResult(value: unknown): McpToolResult {
   return {
     content: [
       {
-        type: "text" as const,
+        type: "text",
         text: JSON.stringify(value, null, 2),
       },
     ],
   };
 }
 
-function errorResult(message: string) {
+function errorResult(message: string): McpToolResult {
   return {
-    content: [{ type: "text" as const, text: message }],
+    content: [{ type: "text", text: message }],
     isError: true,
   };
 }
 
-export function createCloudPilotMcpServer(app: App) {
+function isValidCompatibilityDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+
+  return (
+    !Number.isNaN(parsed.getTime()) &&
+    parsed.toISOString().slice(0, 10) === value
+  );
+}
+
+export async function updateDisposableWorker(
+  app: App,
+  disposableWorkerId: string | undefined,
+  input: {
+    script: string;
+    compatibilityDate: string;
+  },
+) {
+  if (!disposableWorkerId?.trim()) {
+    return errorResult("Disposable Worker updates are not configured.");
+  }
+
+  if (
+    !input.script.trim() ||
+    input.script.length > 500_000 ||
+    !isValidCompatibilityDate(input.compatibilityDate)
+  ) {
+    return errorResult("Invalid Worker script or compatibility date.");
+  }
+
+  let scope;
+
+  try {
+    scope = await app.managementService.getScope();
+  } catch {
+    return errorResult("Unable to verify the managed-resource scope.");
+  }
+
+  const isManaged = scope.resources.some(
+    (resource) =>
+      resource.type === "worker" && resource.id === disposableWorkerId,
+  );
+
+  if (!isManaged) {
+    return errorResult(
+      "The configured disposable Worker is not registered in management scope.",
+    );
+  }
+
+  const desiredState = {
+    resources: [
+      {
+        resource: {
+          type: "worker" as const,
+          id: disposableWorkerId,
+        },
+        attributes: {
+          script: input.script,
+          compatibilityDate: input.compatibilityDate,
+        },
+      },
+    ],
+  };
+
+  let evaluatedPlan;
+
+  try {
+    evaluatedPlan = await app.evaluationService.evaluate(desiredState);
+  } catch {
+    return errorResult(
+      "Worker update evaluation failed. Ensure an infrastructure observation is available.",
+    );
+  }
+
+  const operations = evaluatedPlan.operations;
+
+  if (operations.length === 0) {
+    return errorResult("No Worker update was planned.");
+  }
+
+  const unsupportedOperation = operations.some(
+    ({ operation }) =>
+      operation.action !== "update" ||
+      operation.resource.type !== "worker" ||
+      operation.resource.id !== disposableWorkerId,
+  );
+
+  if (unsupportedOperation) {
+    return errorResult(
+      "Evaluation produced an unsupported operation. Nothing was executed.",
+    );
+  }
+
+  if (
+    operations.some(
+      ({ policy, readiness }) =>
+        policy.action === "deny" || readiness === "blocked",
+    )
+  ) {
+    return errorResult("Worker update blocked by policy.");
+  }
+
+  if (
+    operations.some(
+      ({ approval, readiness }) =>
+        approval.requirement === "required" ||
+        readiness === "approval_required",
+    )
+  ) {
+    return errorResult("Worker update requires human approval.");
+  }
+
+  const plan = {
+    operations: operations.map(({ operation }) => operation),
+  };
+
+  const executionId = crypto.randomUUID();
+  const startedAt = new Date().toISOString();
+
+  try {
+    await app.executionStore.saveExecution({
+      id: executionId,
+      startedAt,
+      status: "running",
+    });
+
+    const summary = await app.executionService.execute(plan);
+
+    if (summary.status === "failed") {
+      const completedAt = new Date().toISOString();
+
+      await app.executionStore.saveExecution({
+        id: executionId,
+        startedAt,
+        completedAt,
+        status: "failed",
+        summary,
+      });
+
+      return errorResult("Worker update execution failed.");
+    }
+
+    const verification = await app.verificationService.verify(desiredState);
+    const completedAt = new Date().toISOString();
+
+    const executionStatus =
+      verification.status === "verified" ? "succeeded" : "failed";
+
+    await app.executionStore.saveExecution({
+      id: executionId,
+      startedAt,
+      completedAt,
+      status: executionStatus,
+      summary,
+      verification,
+    });
+
+    if (executionStatus === "failed") {
+      return errorResult(
+        "Worker update completed, but verification did not confirm the desired state.",
+      );
+    }
+
+    return jsonResult({
+      executionId,
+      ...summary,
+      verification,
+    });
+  } catch (error) {
+    console.error(
+      "Disposable Worker update failed:",
+      error instanceof Error ? { name: error.name } : "Unknown error",
+    );
+
+    try {
+      await app.executionStore.saveExecution({
+        id: executionId,
+        startedAt,
+        completedAt: new Date().toISOString(),
+        status: "failed",
+      });
+    } catch {}
+
+    return errorResult("Worker update execution failed.");
+  }
+}
+
+export function createCloudPilotMcpServer(
+  app: App,
+  disposableWorkerId?: string,
+) {
   const server = new McpServer({
     name: "cloudpilot",
     version: "0.1.0",
@@ -113,11 +314,36 @@ export function createCloudPilotMcpServer(app: App) {
     },
   );
 
+  server.registerTool(
+    "update_disposable_worker",
+    {
+      description:
+        "Update the script on CloudPilot's explicitly configured disposable Worker. The target cannot be selected by the caller. Policy-denied or approval-required operations are not executed.",
+      inputSchema: {
+        script: z.string().min(1).max(500_000),
+        compatibilityDate: z
+          .string()
+          .refine(isValidCompatibilityDate, "Must be a valid YYYY-MM-DD date"),
+      },
+    },
+    async ({ script, compatibilityDate }) =>
+      updateDisposableWorker(app, disposableWorkerId, {
+        script,
+        compatibilityDate,
+      }),
+  );
+
   return server;
 }
 
-export function createCloudPilotMcpHandler(app: App) {
-  return createMcpHandler(() => createCloudPilotMcpServer(app), {
-    route: "/mcp",
-  });
+export function createCloudPilotMcpHandler(
+  app: App,
+  disposableWorkerId?: string,
+) {
+  return createMcpHandler(
+    () => createCloudPilotMcpServer(app, disposableWorkerId),
+    {
+      route: "/mcp",
+    },
+  );
 }

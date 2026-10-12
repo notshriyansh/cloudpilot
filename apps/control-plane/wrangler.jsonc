@@ -3,6 +3,9 @@
   "name": "cloudpilot-control-plane",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-31",
+  "vars": {
+    "CLOUDPILOT_DISPOSABLE_WORKER": "cloudpilot-disposable-test",
+  },
   "observability": {
     "enabled": true,
   },

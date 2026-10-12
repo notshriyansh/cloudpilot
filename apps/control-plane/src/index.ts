@@ -14,7 +14,10 @@ export default {
       }
 
       const app = createProductionApp(env);
-      const handler = createCloudPilotMcpHandler(app);
+      const handler = createCloudPilotMcpHandler(
+        app,
+        env.CLOUDPILOT_DISPOSABLE_WORKER,
+      );
 
       let mcpRequest = request;
 
