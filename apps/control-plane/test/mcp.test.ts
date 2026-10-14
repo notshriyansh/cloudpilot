@@ -157,12 +157,56 @@ describe("updateDisposableWorker", () => {
 
   it("executes an allowed update and verifies the desired state", async () => {
     const app = createTestApp();
+    const target = {
+      resource: { type: "worker" as const, id: workerId },
+      attributes: {
+        script: input.script,
+        compatibilityDate: input.compatibilityDate,
+      },
+    };
+
+    vi.mocked(app.observationService.inspect).mockResolvedValue({
+      id: "test-observation",
+      startedAt: "2026-10-14T00:00:00.000Z",
+      completedAt: "2026-10-14T00:00:01.000Z",
+      status: "completed",
+      state: {
+        resources: [
+          target,
+          {
+            resource: { type: "worker", id: "fluxion-api" },
+            attributes: {},
+          },
+          {
+            resource: { type: "worker", id: "global-link-api" },
+            attributes: {},
+          },
+          {
+            resource: { type: "worker", id: "another-managed-worker" },
+            attributes: {},
+          },
+          {
+            resource: { type: "zone", id: "zone-1" },
+            attributes: {},
+          },
+        ],
+      },
+    });
 
     const result = await updateDisposableWorker(app, workerId, input);
 
     expect(result.isError).toBeUndefined();
     expect(app.executionService.execute).toHaveBeenCalledOnce();
-    expect(app.verificationService.verify).toHaveBeenCalledOnce();
+    expect(app.verificationService.verify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resources: [
+          expect.objectContaining({
+            resource: { type: "worker", id: workerId },
+          }),
+        ],
+      }),
+      { resources: [target] },
+    );
   });
 
   it("does not verify or report success when execution fails", async () => {
