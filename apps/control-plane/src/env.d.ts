@@ -3,4 +3,5 @@ interface Env {
   CLOUDFLARE_API_TOKEN: string;
   CLOUDPILOT_API_TOKEN: string;
   CLOUDPILOT_MCP_TOKEN: string;
+  GROQ_API_KEY: string;
 }

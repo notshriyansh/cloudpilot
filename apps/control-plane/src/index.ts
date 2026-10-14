@@ -1,10 +1,21 @@
 import { authorizeBearer } from "./auth";
 import { createProductionApp, handleRequest } from "./app";
 import { createCloudPilotMcpHandler } from "./mcp";
+import { handleAgentInterpretRequest } from "./agent";
 
 export default {
   async fetch(request, env, ctx): Promise<Response> {
     const url = new URL(request.url);
+
+    if (url.pathname === "/agent/interpret") {
+      const authorization = authorizeBearer(request, env.CLOUDPILOT_API_TOKEN);
+
+      if (!authorization.authorized) {
+        return authorization.response;
+      }
+
+      return handleAgentInterpretRequest(request, env.GROQ_API_KEY);
+    }
 
     if (url.pathname === "/mcp") {
       const authorization = authorizeBearer(request, env.CLOUDPILOT_MCP_TOKEN);
