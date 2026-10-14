@@ -30,6 +30,14 @@ function errorResult(message: string): McpToolResult {
   };
 }
 
+function logError(phase: string, error: unknown): void {
+  console.error(`disposable_update: ${phase}`, {
+    name: error instanceof Error ? error.name : "UnknownError",
+    message: error instanceof Error ? error.message : String(error),
+    ...(error instanceof Error && error.stack ? { stack: error.stack } : {}),
+  });
+}
+
 function isValidCompatibilityDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     return false;
@@ -67,7 +75,8 @@ export async function updateDisposableWorker(
 
   try {
     scope = await app.managementService.getScope();
-  } catch {
+  } catch (error) {
+    logError("management_scope_failed", error);
     return errorResult("Unable to verify the managed-resource scope.");
   }
 
@@ -101,7 +110,8 @@ export async function updateDisposableWorker(
 
   try {
     evaluatedPlan = await app.evaluationService.evaluate(desiredState);
-  } catch {
+  } catch (error) {
+    logError("evaluation_failed", error);
     return errorResult(
       "Worker update evaluation failed. Ensure an infrastructure observation is available.",
     );
@@ -110,6 +120,7 @@ export async function updateDisposableWorker(
   const operations = evaluatedPlan.operations;
 
   if (operations.length === 0) {
+    console.info("disposable_update: no_operation_planned");
     return errorResult("No Worker update was planned.");
   }
 
@@ -121,6 +132,7 @@ export async function updateDisposableWorker(
   );
 
   if (unsupportedOperation) {
+    console.warn("disposable_update: unsupported_operation_rejected");
     return errorResult(
       "Evaluation produced an unsupported operation. Nothing was executed.",
     );
@@ -132,6 +144,7 @@ export async function updateDisposableWorker(
         policy.action === "deny" || readiness === "blocked",
     )
   ) {
+    console.warn("disposable_update: policy_blocked");
     return errorResult("Worker update blocked by policy.");
   }
 
@@ -142,6 +155,7 @@ export async function updateDisposableWorker(
         readiness === "approval_required",
     )
   ) {
+    console.warn("disposable_update: approval_required");
     return errorResult("Worker update requires human approval.");
   }
 
@@ -152,17 +166,40 @@ export async function updateDisposableWorker(
   const executionId = crypto.randomUUID();
   const startedAt = new Date().toISOString();
 
+  console.info("disposable_update: execution_started", { executionId });
+
   try {
+    console.info("disposable_update: running_persist_started", {
+      executionId,
+    });
+
     await app.executionStore.saveExecution({
       id: executionId,
       startedAt,
       status: "running",
     });
 
+    console.info("disposable_update: running_persist_completed", {
+      executionId,
+    });
+
+    console.info("disposable_update: execution_call_started", {
+      executionId,
+    });
+
     const summary = await app.executionService.execute(plan);
+
+    console.info("disposable_update: execution_call_completed", {
+      executionId,
+      status: summary.status,
+    });
 
     if (summary.status === "failed") {
       const completedAt = new Date().toISOString();
+
+      console.info("disposable_update: failed_execution_persist_started", {
+        executionId,
+      });
 
       await app.executionStore.saveExecution({
         id: executionId,
@@ -172,14 +209,49 @@ export async function updateDisposableWorker(
         summary,
       });
 
+      console.info("disposable_update: failed_execution_persist_completed", {
+        executionId,
+      });
+
       return errorResult("Worker update execution failed.");
     }
 
-    const verification = await app.verificationService.verify(desiredState);
+    console.info("disposable_update: verification_started", { executionId });
+
+    const observation = await app.observationService.inspect();
+
+    const targetResourceKeys = new Set(
+      desiredState.resources.map(
+        ({ resource }) => `${resource.type}:${resource.id}`,
+      ),
+    );
+
+    const scopedObservedState = {
+      ...observation.state,
+      resources: observation.state.resources.filter(({ resource }) =>
+        targetResourceKeys.has(`${resource.type}:${resource.id}`),
+      ),
+    };
+
+    const verification = await app.verificationService.verify(
+      desiredState,
+      scopedObservedState,
+    );
+
+    console.info("disposable_update: verification_completed", {
+      executionId,
+      status: verification.status,
+    });
+
     const completedAt = new Date().toISOString();
 
     const executionStatus =
       verification.status === "verified" ? "succeeded" : "failed";
+
+    console.info("disposable_update: final_persist_started", {
+      executionId,
+      status: executionStatus,
+    });
 
     await app.executionStore.saveExecution({
       id: executionId,
@@ -188,6 +260,11 @@ export async function updateDisposableWorker(
       status: executionStatus,
       summary,
       verification,
+    });
+
+    console.info("disposable_update: final_persist_completed", {
+      executionId,
+      status: executionStatus,
     });
 
     if (executionStatus === "failed") {
@@ -202,19 +279,26 @@ export async function updateDisposableWorker(
       verification,
     });
   } catch (error) {
-    console.error(
-      "Disposable Worker update failed:",
-      error instanceof Error ? { name: error.name } : "Unknown error",
-    );
+    logError("execution_or_finalization_failed", error);
 
     try {
+      console.info("disposable_update: failure_persist_started", {
+        executionId,
+      });
+
       await app.executionStore.saveExecution({
         id: executionId,
         startedAt,
         completedAt: new Date().toISOString(),
         status: "failed",
       });
-    } catch {}
+
+      console.info("disposable_update: failure_persist_completed", {
+        executionId,
+      });
+    } catch (persistError) {
+      logError("failure_persist_failed", persistError);
+    }
 
     return errorResult("Worker update execution failed.");
   }
@@ -241,12 +325,10 @@ export function createCloudPilotMcpServer(
         const observation = await app.observationService.inspect();
         return jsonResult(observation);
       } catch (error) {
-        console.error(
-          "MCP infrastructure inspection failed:",
-          error instanceof Error
-            ? { name: error.name, message: error.message }
-            : "Unknown error",
-        );
+        console.error("MCP infrastructure inspection failed:", {
+          name: error instanceof Error ? error.name : "UnknownError",
+          message: error instanceof Error ? error.message : String(error),
+        });
 
         return errorResult("Infrastructure inspection failed.");
       }
@@ -274,7 +356,12 @@ export function createCloudPilotMcpServer(
       try {
         const plan = await app.planningService.plan(parsed.state);
         return jsonResult(plan);
-      } catch {
+      } catch (error) {
+        console.error("MCP infrastructure planning failed:", {
+          name: error instanceof Error ? error.name : "UnknownError",
+          message: error instanceof Error ? error.message : String(error),
+        });
+
         return errorResult(
           "Planning failed. Ensure an infrastructure observation is available.",
         );
@@ -306,7 +393,12 @@ export function createCloudPilotMcpServer(
         );
 
         return jsonResult(evaluatedPlan);
-      } catch {
+      } catch (error) {
+        console.error("MCP infrastructure evaluation failed:", {
+          name: error instanceof Error ? error.name : "UnknownError",
+          message: error instanceof Error ? error.message : String(error),
+        });
+
         return errorResult(
           "Evaluation failed. Ensure an infrastructure observation is available.",
         );
@@ -326,11 +418,12 @@ export function createCloudPilotMcpServer(
           .refine(isValidCompatibilityDate, "Must be a valid YYYY-MM-DD date"),
       },
     },
-    async ({ script, compatibilityDate }) =>
-      updateDisposableWorker(app, disposableWorkerId, {
+    async ({ script, compatibilityDate }) => {
+      return updateDisposableWorker(app, disposableWorkerId, {
         script,
         compatibilityDate,
-      }),
+      });
+    },
   );
 
   return server;

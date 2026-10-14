@@ -58,6 +58,26 @@ function createTestApp() {
     verificationService: {
       verify: vi.fn().mockResolvedValue({ status: "verified" }),
     },
+    observationService: {
+      inspect: vi.fn().mockResolvedValue({
+        id: "test-observation",
+        startedAt: "2026-10-14T00:00:00.000Z",
+        completedAt: "2026-10-14T00:00:01.000Z",
+        status: "completed",
+        state: {
+          resources: [
+            {
+              resource: { type: "worker", id: workerId },
+              attributes: {
+                script: input.script,
+                compatibilityDate: input.compatibilityDate,
+              },
+            },
+          ],
+        },
+      }),
+      getLatest: vi.fn(),
+    },
   });
 }
 

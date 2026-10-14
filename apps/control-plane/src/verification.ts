@@ -29,10 +29,22 @@ export function createVerificationService(
       suppliedObservedState?: ObservedState,
     ): Promise<VerificationResult> {
       try {
-        const observedState =
-          suppliedObservedState ?? (await observationService.inspect()).state;
+        console.info("verification: observation_started");
+
+        const observation =
+          suppliedObservedState === undefined
+            ? await observationService.inspect()
+            : undefined;
+
+        const observedState = suppliedObservedState ?? observation!.state;
+
+        console.info("verification: observation_completed", {
+          resourceCount: observedState.resources.length,
+        });
 
         const safeObservedState = withoutWorkerScripts(observedState);
+
+        console.info("verification: script_drift_check_started");
 
         const driftedKeys = await findWorkerScriptDrift(
           desired,
@@ -40,12 +52,21 @@ export function createVerificationService(
           readWorkerScript,
         );
 
+        console.info("verification: script_drift_check_completed", {
+          driftedResourceCount: driftedKeys.size,
+        });
+
         const comparisonState = markWorkerScriptDrift(
           safeObservedState,
           driftedKeys,
         );
 
         const diff = diffStates(desired, comparisonState);
+
+        console.info("verification: diff_diagnostic", {
+          changeCount: diff.changes.length,
+          changes: diff.changes,
+        });
 
         if (diff.changes.length === 0) {
           return {

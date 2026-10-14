@@ -33,6 +33,14 @@ export async function findWorkerScriptDrift(
 
     const deployedScript = await readWorkerScript(resource.resource.id);
 
+    console.info("disposable_update: diagnostic_deployed_script", {
+      workerId: resource.resource.id,
+      length: deployedScript.length,
+      trailingCharCodes: Array.from(deployedScript.slice(-4)).map((c) =>
+        c.charCodeAt(0),
+      ),
+    });
+
     if (deployedScript !== desiredScript) {
       driftedKeys.add(resourceIdKey(resource.resource));
     }
