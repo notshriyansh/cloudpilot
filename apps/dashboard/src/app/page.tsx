@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   Terminal,
 } from "lucide-react";
+import { DesiredStatePanel } from "@/components/desired-state-panel";
 
 type Resource = {
   resource?: {
@@ -385,6 +386,8 @@ export default function DashboardPage() {
               </div>
             )}
           </section>
+
+          <DesiredStatePanel />
 
           <section
             id="plans-changes"

@@ -1,6 +1,7 @@
 ﻿import { NextResponse } from "next/server";
 
-export async function GET() {
+export async function GET(request: Request) {
+  request.url;
   const apiUrl = process.env.CLOUDPILOT_API_URL;
   const apiToken = process.env.CLOUDPILOT_API_TOKEN;
 
@@ -12,16 +13,13 @@ export async function GET() {
   }
 
   try {
-    const response = await fetch(
-      `${apiUrl.replace(/\/+$/, "")}/state`,
-      {
-        headers: {
-          Authorization: `Bearer ${apiToken}`,
-        },
-        cache: "no-store",
-        signal: AbortSignal.timeout(30_000),
+    const response = await fetch(`${apiUrl.replace(/\/+$/, "")}/state`, {
+      headers: {
+        Authorization: `Bearer ${apiToken}`,
       },
-    );
+      cache: "no-store",
+      signal: AbortSignal.timeout(30_000),
+    });
 
     const body = await response.text();
 

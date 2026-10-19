@@ -1,0 +1,380 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import {
+  emptyDesiredState,
+  formatJson,
+  parseJson,
+  type DesiredState,
+  type EvaluatedPlan,
+} from "@/lib/desired-state";
+
+type ApiError = {
+  error?: string;
+  errors?: unknown[];
+};
+
+async function readError(response: Response): Promise<string> {
+  const body = (await response.json().catch(() => ({}))) as ApiError;
+
+  if (Array.isArray(body.errors) && body.errors.length > 0) {
+    return `${body.error ?? "Request failed"}: ${body.errors
+      .map((item) => (typeof item === "string" ? item : JSON.stringify(item)))
+      .join("; ")}`;
+  }
+
+  return body.error ?? `Request failed (${response.status})`;
+}
+
+function ReadinessBadge({
+  readiness,
+}: {
+  readiness: "ready" | "blocked" | "approval_required";
+}) {
+  const styles = {
+    ready: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+    blocked: "border-red-500/30 bg-red-500/10 text-red-300",
+    approval_required: "border-amber-500/30 bg-amber-500/10 text-amber-300",
+  };
+
+  const labels = {
+    ready: "Ready",
+    blocked: "Blocked",
+    approval_required: "Approval required",
+  };
+
+  return (
+    <span
+      className={`inline-flex rounded-full border px-2.5 py-1 text-xs ${styles[readiness]}`}
+    >
+      {labels[readiness]}
+    </span>
+  );
+}
+
+export function DesiredStatePanel() {
+  const [editor, setEditor] = useState(formatJson(emptyDesiredState));
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [evaluating, setEvaluating] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [evaluation, setEvaluation] = useState<EvaluatedPlan | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadDesiredState() {
+      try {
+        const response = await fetch("/api/desired-state", {
+          cache: "no-store",
+        });
+
+        if (response.status === 404) {
+          if (!cancelled) {
+            setNotice("No saved desired state yet. Add resources below.");
+          }
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error(await readError(response));
+        }
+
+        const result = (await response.json()) as DesiredState;
+
+        if (!cancelled) {
+          setEditor(formatJson(result));
+          setSaved(true);
+          setNotice("Loaded saved desired state.");
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Unable to load desired state.",
+          );
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void loadDesiredState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function getDesiredState(): DesiredState {
+    const parsed = parseJson(editor);
+
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      !("resources" in parsed) ||
+      !Array.isArray(parsed.resources)
+    ) {
+      throw new Error(
+        'Desired state must be a JSON object containing a "resources" array.',
+      );
+    }
+
+    return parsed as DesiredState;
+  }
+
+  async function saveDesiredState() {
+    setError(null);
+    setNotice(null);
+    setSaving(true);
+
+    try {
+      const desired = getDesiredState();
+
+      const response = await fetch("/api/desired-state", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(desired),
+      });
+
+      if (!response.ok) throw new Error(await readError(response));
+
+      const result = (await response.json()) as DesiredState;
+      setEditor(formatJson(result));
+      setSaved(true);
+      setEvaluation(null);
+      setNotice("Desired state saved. No infrastructure changes were made.");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Unable to save desired state.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function evaluateDesiredState() {
+    setError(null);
+    setNotice(null);
+    setEvaluating(true);
+
+    try {
+      const desired = getDesiredState();
+
+      const response = await fetch("/api/evaluate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(desired),
+      });
+
+      if (!response.ok) throw new Error(await readError(response));
+
+      const result = (await response.json()) as EvaluatedPlan;
+      setEvaluation(result);
+      setNotice("Evaluation completed. No infrastructure changes were made.");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to evaluate desired state.",
+      );
+      setEvaluation(null);
+    } finally {
+      setEvaluating(false);
+    }
+  }
+
+  const operations = evaluation?.operations ?? [];
+  const readyCount = operations.filter(
+    (item) => item.readiness === "ready",
+  ).length;
+  const blockedCount = operations.filter(
+    (item) => item.readiness === "blocked",
+  ).length;
+  const approvalCount = operations.filter(
+    (item) => item.readiness === "approval_required",
+  ).length;
+
+  return (
+    <section
+      id="desired-state"
+      className="space-y-5 rounded-2xl border border-white/10 bg-slate-950/60 p-5"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-[0.18em] text-sky-300">
+            Desired state
+          </p>
+          <h2 className="mt-2 text-xl font-semibold text-white">
+            Configuration & evaluation
+          </h2>
+          <p className="mt-1 max-w-2xl text-sm text-slate-400">
+            Define the infrastructure state CloudPilot should target, then
+            review the proposed operations and policy readiness.
+          </p>
+        </div>
+        <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs text-amber-200">
+          Preview only · no execution
+        </span>
+      </div>
+
+      {error && (
+        <div
+          role="alert"
+          className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200"
+        >
+          {error}
+        </div>
+      )}
+
+      {notice && (
+        <div
+          role="status"
+          className="rounded-lg border border-white/10 bg-white/3 p-3 text-sm text-slate-300"
+        >
+          {notice}
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <label
+            htmlFor="desired-state-json"
+            className="text-sm font-medium text-slate-200"
+          >
+            Desired state JSON
+          </label>
+          <span className="text-xs text-slate-500">
+            {saved ? "Saved configuration exists" : "Not saved yet"}
+          </span>
+        </div>
+        <textarea
+          id="desired-state-json"
+          spellCheck={false}
+          value={editor}
+          onChange={(event) => {
+            setEditor(event.target.value);
+            setSaved(false);
+            setEvaluation(null);
+          }}
+          className="min-h-72 w-full resize-y rounded-xl border border-white/10 bg-black/30 p-4 font-mono text-sm leading-6 text-slate-200 outline-none focus:border-sky-400/60"
+          placeholder={'{\n  "resources": []\n}'}
+          disabled={loading}
+        />
+        <p className="text-xs text-slate-500">
+          The control plane performs authoritative schema validation when you
+          save or evaluate.
+        </p>
+      </div>
+
+      <div className="flex flex-wrap gap-3">
+        <button
+          type="button"
+          onClick={() => void saveDesiredState()}
+          disabled={loading || saving || evaluating}
+          className="rounded-lg bg-sky-400 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {saving ? "Saving…" : "Save desired state"}
+        </button>
+        <button
+          type="button"
+          onClick={() => void evaluateDesiredState()}
+          disabled={loading || saving || evaluating}
+          className="rounded-lg border border-white/15 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {evaluating ? "Evaluating…" : "Evaluate changes"}
+        </button>
+      </div>
+
+      {evaluation && (
+        <div className="space-y-4 border-t border-white/10 pt-5">
+          <div>
+            <h3 className="font-semibold text-white">Evaluation result</h3>
+            <p className="mt-1 text-sm text-slate-400">
+              {operations.length} planned operation
+              {operations.length === 1 ? "" : "s"} returned by the control
+              plane.
+            </p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            {[
+              { label: "Ready", value: readyCount, color: "text-emerald-300" },
+              { label: "Blocked", value: blockedCount, color: "text-red-300" },
+              {
+                label: "Approval required",
+                value: approvalCount,
+                color: "text-amber-300",
+              },
+            ].map((item) => (
+              <div
+                key={item.label}
+                className="rounded-xl border border-white/10 bg-white/3 p-4"
+              >
+                <p className="text-sm text-slate-400">{item.label}</p>
+                <p className={`mt-2 text-2xl font-semibold ${item.color}`}>
+                  {item.value}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          {operations.length === 0 ? (
+            <div className="rounded-xl border border-white/10 p-4 text-sm text-slate-300">
+              No operations were returned. This may mean the desired and
+              observed states require no changes.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {operations.map((item, index) => {
+                const operation = item.operation;
+
+                return (
+                  <article
+                    key={`${operation.resource.type}:${operation.resource.id}:${operation.action}:${index}`}
+                    className="rounded-xl border border-white/10 bg-white/2 p-4"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-white">
+                          <span className="mr-2 font-mono text-sky-300">
+                            {operation.action.toUpperCase()}
+                          </span>
+                          {operation.resource.type}: {operation.resource.id}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {operation.dependencies.length} dependency
+                          {operation.dependencies.length === 1 ? "" : "ies"}
+                        </p>
+                      </div>
+                      <ReadinessBadge readiness={item.readiness} />
+                    </div>
+
+                    <details className="mt-4">
+                      <summary className="cursor-pointer text-sm text-slate-300 hover:text-white">
+                        Policy, risk, approval & state details
+                      </summary>
+                      <pre className="mt-3 overflow-x-auto rounded-lg bg-black/30 p-3 text-xs leading-5 text-slate-300">
+                        {formatJson({
+                          policy: item.policy,
+                          risk: item.risk,
+                          approval: item.approval,
+                          desired: operation.desired,
+                          observed: operation.observed,
+                          dependencies: operation.dependencies,
+                        })}
+                      </pre>
+                    </details>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
