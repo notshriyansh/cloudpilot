@@ -17,6 +17,8 @@ import {
   Terminal,
 } from "lucide-react";
 import { DesiredStatePanel } from "@/components/desired-state-panel";
+import { PlansChangesPanel } from "@/components/plans-changes-panel";
+import type { EvaluatedPlan } from "@/lib/desired-state";
 
 type Resource = {
   resource?: {
@@ -48,6 +50,7 @@ export default function DashboardPage() {
   const [observation, setObservation] = useState<Observation | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [evaluation, setEvaluation] = useState<EvaluatedPlan | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -387,41 +390,25 @@ export default function DashboardPage() {
             )}
           </section>
 
-          <DesiredStatePanel />
+          <DesiredStatePanel onEvaluationChange={setEvaluation} />
+
+          <PlansChangesPanel evaluation={evaluation} />
 
           <section
-            id="plans-changes"
-            className="scroll-mt-6 grid gap-4 md:grid-cols-2"
+            id="executions"
+            className="scroll-mt-6 rounded-xl border border-white/[0.07] bg-[#10131b] p-5"
           >
-            <article className="rounded-xl border border-white/[0.07] bg-[#10131b] p-5">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <GitBranch size={17} className="text-indigo-400" />
-                Plans & changes
-              </div>
-              <p className="mt-3 text-sm leading-6 text-slate-500">
-                Compare desired and observed state, then review proposed
-                infrastructure operations.
-              </p>
-              <p className="mt-4 text-xs text-slate-600">
-                Planning UI — next implementation checkpoint
-              </p>
-            </article>
-            <article
-              id="executions"
-              className="scroll-mt-6 rounded-xl border border-white/[0.07] bg-[#10131b] p-5"
-            >
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <Activity size={17} className="text-indigo-400" />
-                Execution & verification
-              </div>
-              <p className="mt-3 text-sm leading-6 text-slate-500">
-                Review the latest execution, its outcome, and whether the
-                resulting infrastructure matches the desired state.
-              </p>
-              <p className="mt-4 text-xs text-slate-600">
-                Execution UI — next implementation checkpoint
-              </p>
-            </article>
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Activity size={17} className="text-indigo-400" />
+              Execution & verification
+            </div>
+            <p className="mt-3 text-sm leading-6 text-slate-500">
+              Review the latest execution, its outcome, and whether the
+              resulting infrastructure matches the desired state.
+            </p>
+            <p className="mt-4 text-xs text-slate-600">
+              Execution UI — next implementation checkpoint
+            </p>
           </section>
 
           <section

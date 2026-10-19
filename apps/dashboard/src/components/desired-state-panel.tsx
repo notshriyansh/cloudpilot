@@ -52,7 +52,13 @@ function ReadinessBadge({
   );
 }
 
-export function DesiredStatePanel() {
+type DesiredStatePanelProps = {
+  onEvaluationChange: (evaluation: EvaluatedPlan | null) => void;
+};
+
+export function DesiredStatePanel({
+  onEvaluationChange,
+}: DesiredStatePanelProps) {
   const [editor, setEditor] = useState(formatJson(emptyDesiredState));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -60,7 +66,6 @@ export function DesiredStatePanel() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [evaluation, setEvaluation] = useState<EvaluatedPlan | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -145,7 +150,7 @@ export function DesiredStatePanel() {
       const result = (await response.json()) as DesiredState;
       setEditor(formatJson(result));
       setSaved(true);
-      setEvaluation(null);
+      onEvaluationChange(null);
       setNotice("Desired state saved. No infrastructure changes were made.");
     } catch (err) {
       setError(
@@ -173,30 +178,20 @@ export function DesiredStatePanel() {
       if (!response.ok) throw new Error(await readError(response));
 
       const result = (await response.json()) as EvaluatedPlan;
-      setEvaluation(result);
+
+      onEvaluationChange(result);
       setNotice("Evaluation completed. No infrastructure changes were made.");
     } catch (err) {
+      onEvaluationChange(null);
       setError(
         err instanceof Error
           ? err.message
           : "Unable to evaluate desired state.",
       );
-      setEvaluation(null);
     } finally {
       setEvaluating(false);
     }
   }
-
-  const operations = evaluation?.operations ?? [];
-  const readyCount = operations.filter(
-    (item) => item.readiness === "ready",
-  ).length;
-  const blockedCount = operations.filter(
-    (item) => item.readiness === "blocked",
-  ).length;
-  const approvalCount = operations.filter(
-    (item) => item.readiness === "approval_required",
-  ).length;
 
   return (
     <section
@@ -258,7 +253,7 @@ export function DesiredStatePanel() {
           onChange={(event) => {
             setEditor(event.target.value);
             setSaved(false);
-            setEvaluation(null);
+            onEvaluationChange(null);
           }}
           className="min-h-72 w-full resize-y rounded-xl border border-white/10 bg-black/30 p-4 font-mono text-sm leading-6 text-slate-200 outline-none focus:border-sky-400/60"
           placeholder={'{\n  "resources": []\n}'}
@@ -288,93 +283,6 @@ export function DesiredStatePanel() {
           {evaluating ? "Evaluating…" : "Evaluate changes"}
         </button>
       </div>
-
-      {evaluation && (
-        <div className="space-y-4 border-t border-white/10 pt-5">
-          <div>
-            <h3 className="font-semibold text-white">Evaluation result</h3>
-            <p className="mt-1 text-sm text-slate-400">
-              {operations.length} planned operation
-              {operations.length === 1 ? "" : "s"} returned by the control
-              plane.
-            </p>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-3">
-            {[
-              { label: "Ready", value: readyCount, color: "text-emerald-300" },
-              { label: "Blocked", value: blockedCount, color: "text-red-300" },
-              {
-                label: "Approval required",
-                value: approvalCount,
-                color: "text-amber-300",
-              },
-            ].map((item) => (
-              <div
-                key={item.label}
-                className="rounded-xl border border-white/10 bg-white/3 p-4"
-              >
-                <p className="text-sm text-slate-400">{item.label}</p>
-                <p className={`mt-2 text-2xl font-semibold ${item.color}`}>
-                  {item.value}
-                </p>
-              </div>
-            ))}
-          </div>
-
-          {operations.length === 0 ? (
-            <div className="rounded-xl border border-white/10 p-4 text-sm text-slate-300">
-              No operations were returned. This may mean the desired and
-              observed states require no changes.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {operations.map((item, index) => {
-                const operation = item.operation;
-
-                return (
-                  <article
-                    key={`${operation.resource.type}:${operation.resource.id}:${operation.action}:${index}`}
-                    className="rounded-xl border border-white/10 bg-white/2 p-4"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <p className="font-medium text-white">
-                          <span className="mr-2 font-mono text-sky-300">
-                            {operation.action.toUpperCase()}
-                          </span>
-                          {operation.resource.type}: {operation.resource.id}
-                        </p>
-                        <p className="mt-1 text-xs text-slate-500">
-                          {operation.dependencies.length} dependency
-                          {operation.dependencies.length === 1 ? "" : "ies"}
-                        </p>
-                      </div>
-                      <ReadinessBadge readiness={item.readiness} />
-                    </div>
-
-                    <details className="mt-4">
-                      <summary className="cursor-pointer text-sm text-slate-300 hover:text-white">
-                        Policy, risk, approval & state details
-                      </summary>
-                      <pre className="mt-3 overflow-x-auto rounded-lg bg-black/30 p-3 text-xs leading-5 text-slate-300">
-                        {formatJson({
-                          policy: item.policy,
-                          risk: item.risk,
-                          approval: item.approval,
-                          desired: operation.desired,
-                          observed: operation.observed,
-                          dependencies: operation.dependencies,
-                        })}
-                      </pre>
-                    </details>
-                  </article>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
     </section>
   );
 }
