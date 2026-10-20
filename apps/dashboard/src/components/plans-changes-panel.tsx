@@ -13,6 +13,7 @@ import type { EvaluatedOperation, EvaluatedPlan } from "@/lib/desired-state";
 import { AttributeChange, getAttributeChanges } from "@/lib/attribute-diff";
 import { buildOperationSummary } from "@/lib/operation-summary";
 import { buildSafetyContext } from "@/lib/safety-context";
+import { buildOperationImpact } from "@/lib/operation-impact";
 
 type Props = {
   evaluation: EvaluatedPlan | null;
@@ -251,6 +252,8 @@ function OperationCard({
 
   const safetyContext = buildSafetyContext(item);
 
+  const impact = buildOperationImpact(item, operations);
+
   const safetyToneStyles = {
     danger: "border-red-500/20 bg-red-500/5 text-red-300",
     warning: "border-amber-500/20 bg-amber-500/5 text-amber-200",
@@ -304,6 +307,109 @@ function OperationCard({
         <p className="text-sm leading-6 text-slate-300">
           {buildOperationSummary(operation)}
         </p>
+      </div>
+
+      <div className="border-t border-white/6 px-4 py-3 sm:px-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-medium text-slate-200">
+            Dependencies & impact
+          </p>
+          <span className="text-xs text-slate-500">
+            {impact.position > 0
+              ? `Planned position ${impact.position} of ${impact.totalOperations}`
+              : "Position unavailable"}
+          </span>
+        </div>
+
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-lg border border-white/8 bg-white/2 p-3">
+            <p className="text-xs font-medium text-slate-400">
+              Related dependency operations
+            </p>
+
+            {impact.prerequisites.length === 0 &&
+            impact.unresolvedDependencies.length === 0 ? (
+              <p className="mt-2 text-sm text-slate-500">
+                No dependencies declared.
+              </p>
+            ) : (
+              <ul className="mt-2 space-y-3">
+                {impact.prerequisites.map((related) => (
+                  <li
+                    key={`${related.resource.type}:${related.resource.id}`}
+                    className="text-sm text-slate-300"
+                  >
+                    <span className="text-indigo-300">
+                      Operation {String(related.index + 1).padStart(2, "0")}
+                    </span>
+                    {" · "}
+                    {related.action} {related.resource.type}:{" "}
+                    {related.resource.id}
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                      {related.relationship === "before"
+                        ? "Expected before this operation."
+                        : "Expected after this operation."}
+                    </p>
+                  </li>
+                ))}
+
+                {impact.unresolvedDependencies.map((dependency) => (
+                  <li
+                    key={`${dependency.type}:${dependency.id}`}
+                    className="text-sm text-amber-200"
+                  >
+                    {dependency.type}: {dependency.id}
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                      No matching operation in this evaluation. Its current
+                      state has not been verified by this result.
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="rounded-lg border border-white/8 bg-white/2 p-3">
+            <p className="text-xs font-medium text-slate-400">
+              Direct downstream operations
+            </p>
+
+            {impact.downstreamOperations.length === 0 ? (
+              <p className="mt-2 text-sm text-slate-500">
+                No direct dependents were identified in this plan. This does not
+                establish that other infrastructure dependents are absent.
+              </p>
+            ) : (
+              <ul className="mt-2 space-y-3">
+                {impact.downstreamOperations.map((related) => (
+                  <li
+                    key={`${related.resource.type}:${related.resource.id}`}
+                    className="text-sm text-slate-300"
+                  >
+                    <span className="text-indigo-300">
+                      Operation {String(related.index + 1).padStart(2, "0")}
+                    </span>
+                    {" · "}
+                    {related.action} {related.resource.type}:{" "}
+                    {related.resource.id}
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                      {related.relationship === "before"
+                        ? "Expected before this operation."
+                        : "Expected after this operation."}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <p className="mt-3 text-xs leading-5 text-slate-500">
+              Impact is limited to direct relationships represented by
+              operations in this evaluation. It does not establish the complete
+              infrastructure impact. The planner&apos;s operation order remains
+              authoritative.
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="border-t border-white/6 px-4 py-3 sm:px-5">
