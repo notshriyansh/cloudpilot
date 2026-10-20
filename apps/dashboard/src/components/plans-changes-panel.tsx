@@ -14,6 +14,7 @@ import { AttributeChange, getAttributeChanges } from "@/lib/attribute-diff";
 import { buildOperationSummary } from "@/lib/operation-summary";
 import { buildSafetyContext } from "@/lib/safety-context";
 import { buildOperationImpact } from "@/lib/operation-impact";
+import { buildPlanReview } from "@/lib/plan-review";
 
 type Props = {
   evaluation: EvaluatedPlan | null;
@@ -29,6 +30,14 @@ const readinessLabels = {
   ready: "Ready",
   blocked: "Blocked",
   approval_required: "Approval required",
+};
+
+const planReviewStyles = {
+  empty: "border-white/10 bg-white/5 text-slate-300",
+  blocked: "border-red-500/30 bg-red-500/10 text-red-300",
+  approval_required: "border-amber-500/30 bg-amber-500/10 text-amber-300",
+  review_required: "border-orange-500/30 bg-orange-500/10 text-orange-200",
+  ready: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
 };
 
 const actionStyles = {
@@ -585,6 +594,7 @@ export function PlansChangesPanel({ evaluation }: Props) {
   const approval = operations.filter(
     (item) => item.readiness === "approval_required",
   ).length;
+  const review = evaluation ? buildPlanReview(evaluation) : null;
 
   return (
     <section
@@ -650,6 +660,72 @@ export function PlansChangesPanel({ evaluation }: Props) {
               </div>
             ))}
           </div>
+
+          {review && (
+            <div className="rounded-xl border border-white/[0.07] bg-white/2 p-4 sm:p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                    Plan review
+                  </p>
+                  <h3 className="mt-2 text-base font-semibold text-white">
+                    {review.heading}
+                  </h3>
+                  <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-400">
+                    {review.explanation}
+                  </p>
+                </div>
+
+                <span
+                  className={`shrink-0 rounded-full border px-2.5 py-1 text-xs ${planReviewStyles[review.status]}`}
+                >
+                  {review.status === "approval_required"
+                    ? "Approval required"
+                    : review.status === "review_required"
+                      ? "Review required"
+                      : review.status === "blocked"
+                        ? "Blocked"
+                        : review.status === "empty"
+                          ? "No operations"
+                          : "Checks passed"}
+                </span>
+              </div>
+
+              {review.attentionItems.length > 0 && (
+                <div className="mt-4 border-t border-white/[0.07] pt-4">
+                  <p className="text-xs font-medium text-slate-400">
+                    Items requiring attention ({review.attentionItems.length})
+                  </p>
+
+                  <ul className="mt-3 space-y-2">
+                    {review.attentionItems.map((item) => (
+                      <li
+                        key={`${item.resource.type}:${item.resource.id}:${item.index}`}
+                        className="rounded-lg border border-white/[0.07] bg-black/10 p-3"
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-xs text-indigo-300">
+                            Operation {String(item.index + 1).padStart(2, "0")}
+                          </span>
+                          <span className="text-sm font-medium text-slate-200">
+                            {item.action} {item.resource.type}:{" "}
+                            {item.resource.id}
+                          </span>
+                        </div>
+
+                        <p className="mt-1 text-sm text-slate-300">
+                          {item.heading}
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">
+                          {item.explanation}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
 
           {operations.length === 0 ? (
             <div className="rounded-lg border border-white/8 p-5">
