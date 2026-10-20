@@ -10,6 +10,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import type { EvaluatedOperation, EvaluatedPlan } from "@/lib/desired-state";
+import { AttributeChange, getAttributeChanges } from "@/lib/attribute-diff";
 
 type Props = {
   evaluation: EvaluatedPlan | null;
@@ -88,46 +89,6 @@ function valuesEqual(a: unknown, b: unknown): boolean {
   }
 
   return false;
-}
-
-type AttributeChange = {
-  key: string;
-  status: "added" | "changed" | "removed" | "unchanged";
-  observed: unknown;
-  desired: unknown;
-};
-
-function getAttributeChanges(
-  observed: Record<string, unknown>,
-  desired: Record<string, unknown>,
-): AttributeChange[] {
-  const keys = [
-    ...new Set([...Object.keys(observed), ...Object.keys(desired)]),
-  ].sort();
-
-  return keys.map((key) => {
-    const hasObserved = Object.hasOwn(observed, key);
-    const hasDesired = Object.hasOwn(desired, key);
-
-    let status: AttributeChange["status"];
-
-    if (!hasObserved) {
-      status = "added";
-    } else if (!hasDesired) {
-      status = "removed";
-    } else if (!valuesEqual(observed[key], desired[key])) {
-      status = "changed";
-    } else {
-      status = "unchanged";
-    }
-
-    return {
-      key,
-      status,
-      observed: observed[key],
-      desired: desired[key],
-    };
-  });
 }
 
 function DetailRow({ label, value }: { label: string; value: unknown }) {
