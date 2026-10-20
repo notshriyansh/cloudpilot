@@ -12,6 +12,7 @@ import {
 import type { EvaluatedOperation, EvaluatedPlan } from "@/lib/desired-state";
 import { AttributeChange, getAttributeChanges } from "@/lib/attribute-diff";
 import { buildOperationSummary } from "@/lib/operation-summary";
+import { buildSafetyContext } from "@/lib/safety-context";
 
 type Props = {
   evaluation: EvaluatedPlan | null;
@@ -248,6 +249,15 @@ function OperationCard({
 }) {
   const { operation } = item;
 
+  const safetyContext = buildSafetyContext(item);
+
+  const safetyToneStyles = {
+    danger: "border-red-500/20 bg-red-500/5 text-red-300",
+    warning: "border-amber-500/20 bg-amber-500/5 text-amber-200",
+    caution: "border-orange-500/20 bg-orange-500/5 text-orange-200",
+    success: "border-emerald-500/20 bg-emerald-500/5 text-emerald-300",
+  };
+
   const ActionIcon = {
     create: ArrowUpRight,
     update: ArrowLeftRight,
@@ -294,6 +304,32 @@ function OperationCard({
         <p className="text-sm leading-6 text-slate-300">
           {buildOperationSummary(operation)}
         </p>
+      </div>
+
+      <div className="border-t border-white/6 px-4 py-3 sm:px-5">
+        <div
+          className={`rounded-lg border p-3 ${safetyToneStyles[safetyContext.tone]}`}
+        >
+          <p className="text-sm font-semibold">{safetyContext.heading}</p>
+
+          <p className="mt-1 text-sm leading-5 text-slate-300">
+            {safetyContext.explanation}
+          </p>
+
+          <ul className="mt-3 space-y-1.5">
+            {safetyContext.checks.map((check) => (
+              <li
+                key={check}
+                className="flex items-start gap-2 text-xs leading-5 text-slate-400"
+              >
+                <span aria-hidden="true" className="mt-0.5">
+                  •
+                </span>
+                <span>{check}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
 
       <div className="grid gap-3 border-t border-white/6 p-4 sm:grid-cols-3 sm:p-5">
