@@ -33,6 +33,14 @@ const actionStyles = {
   delete: "text-red-300",
 };
 
+function resourceKey(resource: { type: string; id: string }): string {
+  return JSON.stringify([resource.type, resource.id]);
+}
+
+function operationLabel(item: EvaluatedOperation): string {
+  return `${item.operation.action.toUpperCase()} ${item.operation.resource.type}: ${item.operation.resource.id}`;
+}
+
 function displayValue(value: unknown): string {
   if (value === undefined) return "Not specified";
   if (value === null) return "null";
@@ -325,9 +333,11 @@ function StateComparison({
 function OperationCard({
   item,
   index,
+  operations,
 }: {
   item: EvaluatedOperation;
   index: number;
+  operations: EvaluatedOperation[];
 }) {
   const { operation } = item;
 
@@ -438,20 +448,60 @@ function OperationCard({
                 </p>
               ) : (
                 <ul className="space-y-2">
-                  {operation.dependencies.map((dependency) => (
-                    <li
-                      key={`${dependency.type}:${dependency.id}`}
-                      className="flex items-center gap-2 text-sm text-slate-300"
-                    >
-                      <GitBranch
-                        size={14}
-                        className="shrink-0 text-slate-500"
-                      />
-                      <span className="break-all">
-                        {dependency.type}: {dependency.id}
-                      </span>
-                    </li>
-                  ))}
+                  {operation.dependencies.map((dependency) => {
+                    const relatedIndex = operations.findIndex(
+                      (candidate) =>
+                        resourceKey(candidate.operation.resource) ===
+                        resourceKey(dependency),
+                    );
+
+                    const relatedOperation =
+                      relatedIndex >= 0 ? operations[relatedIndex] : undefined;
+
+                    const isReverseDeleteOrdering =
+                      operation.action === "delete" &&
+                      relatedOperation?.operation.action === "delete";
+
+                    return (
+                      <li
+                        key={resourceKey(dependency)}
+                        className="rounded-lg border border-white/8 bg-black/15 p-3"
+                      >
+                        <div className="flex items-start gap-2">
+                          <GitBranch
+                            size={14}
+                            className="mt-0.5 shrink-0 text-slate-500"
+                          />
+
+                          <div className="min-w-0">
+                            <p className="break-all text-sm text-slate-200">
+                              {dependency.type}: {dependency.id}
+                            </p>
+
+                            {relatedOperation ? (
+                              <p className="mt-1 text-xs leading-5 text-indigo-300">
+                                Operation{" "}
+                                {String(relatedIndex + 1).padStart(2, "0")} in
+                                this plan
+                              </p>
+                            ) : (
+                              <p className="mt-1 text-xs leading-5 text-slate-500">
+                                No operation for this resource appears in the
+                                current evaluation.
+                              </p>
+                            )}
+
+                            {isReverseDeleteOrdering && (
+                              <p className="mt-1 text-xs leading-5 text-amber-300">
+                                Both resources have deletion operations. The
+                                planner handles their deletion order separately.
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </div>
@@ -559,11 +609,23 @@ export function PlansChangesPanel({ evaluation }: Props) {
             </div>
           ) : (
             <div className="space-y-3">
+              <div className="rounded-lg border border-white/[0.07] bg-white/2 p-4">
+                <p className="text-sm font-medium text-slate-200">
+                  Operation order
+                </p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  Operations are displayed in the order returned by the control
+                  plane planner. This is a planned order, not an execution
+                  record.
+                </p>
+              </div>
+
               {operations.map((item, index) => (
                 <OperationCard
                   key={`${item.operation.resource.type}:${item.operation.resource.id}:${item.operation.action}:${index}`}
                   item={item}
                   index={index}
+                  operations={operations}
                 />
               ))}
             </div>
