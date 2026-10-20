@@ -42,6 +42,86 @@ function displayValue(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
 
+function valuesEqual(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+
+  if (
+    a === null ||
+    b === null ||
+    typeof a !== "object" ||
+    typeof b !== "object"
+  ) {
+    return false;
+  }
+
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+
+  if (Array.isArray(a) && Array.isArray(b)) {
+    return (
+      a.length === b.length &&
+      a.every((value, index) => valuesEqual(value, b[index]))
+    );
+  }
+
+  if (!Array.isArray(a) && !Array.isArray(b)) {
+    const aRecord = a as Record<string, unknown>;
+    const bRecord = b as Record<string, unknown>;
+    const aKeys = Object.keys(aRecord);
+    const bKeys = Object.keys(bRecord);
+
+    return (
+      aKeys.length === bKeys.length &&
+      aKeys.every(
+        (key) =>
+          Object.hasOwn(bRecord, key) &&
+          valuesEqual(aRecord[key], bRecord[key]),
+      )
+    );
+  }
+
+  return false;
+}
+
+type AttributeChange = {
+  key: string;
+  status: "added" | "changed" | "removed" | "unchanged";
+  observed: unknown;
+  desired: unknown;
+};
+
+function getAttributeChanges(
+  observed: Record<string, unknown>,
+  desired: Record<string, unknown>,
+): AttributeChange[] {
+  const keys = [
+    ...new Set([...Object.keys(observed), ...Object.keys(desired)]),
+  ].sort();
+
+  return keys.map((key) => {
+    const hasObserved = Object.hasOwn(observed, key);
+    const hasDesired = Object.hasOwn(desired, key);
+
+    let status: AttributeChange["status"];
+
+    if (!hasObserved) {
+      status = "added";
+    } else if (!hasDesired) {
+      status = "removed";
+    } else if (!valuesEqual(observed[key], desired[key])) {
+      status = "changed";
+    } else {
+      status = "unchanged";
+    }
+
+    return {
+      key,
+      status,
+      observed: observed[key],
+      desired: desired[key],
+    };
+  });
+}
+
 function DetailRow({ label, value }: { label: string; value: unknown }) {
   return (
     <div className="grid gap-1 border-b border-white/5 py-3 last:border-0 sm:grid-cols-[140px_1fr]">
@@ -58,25 +138,48 @@ function StateComparison({
 }: {
   operation: EvaluatedOperation["operation"];
 }) {
-  const desired = operation.desired?.attributes ?? {};
-  const observed = operation.observed?.attributes ?? {};
-  const keys = [
-    ...new Set([...Object.keys(observed), ...Object.keys(desired)]),
-  ].sort();
+  const desiredResource = operation.desired;
+  const observedResource = operation.observed;
+
+  const desired = desiredResource?.attributes ?? {};
+  const observed = observedResource?.attributes ?? {};
+
+  const changes = getAttributeChanges(observed, desired);
+
+  const statusStyles: Record<AttributeChange["status"], string> = {
+    added: "border-emerald-500/20 bg-emerald-500/5 text-emerald-300",
+    changed: "border-sky-500/20 bg-sky-500/5 text-sky-300",
+    removed: "border-red-500/20 bg-red-500/5 text-red-300",
+    unchanged: "border-white/10 bg-white/[0.02] text-slate-400",
+  };
+
+  const statusLabels: Record<AttributeChange["status"], string> = {
+    added: "Added",
+    changed: "Changed",
+    removed: "Removed",
+    unchanged: "Unchanged",
+  };
 
   if (operation.action === "create") {
     return (
-      <div className="rounded-lg border border-white/8 bg-black/20 p-3">
-        <p className="mb-2 text-xs font-medium text-slate-400">
-          Proposed attributes
-        </p>
-        <pre className="overflow-x-auto whitespace-pre-wrap wrap-break-word text-xs leading-5 text-slate-300">
-          {JSON.stringify(desired, null, 2)}
-        </pre>
-        {keys.length === 0 && (
-          <p className="text-xs text-slate-500">
+      <div className="space-y-3">
+        <div className="rounded-lg border border-emerald-500/15 bg-emerald-500/5 p-3">
+          <p className="text-sm font-medium text-emerald-300">New resource</p>
+          <p className="mt-1 text-xs leading-5 text-slate-400">
+            CloudPilot proposes creating this resource. Review the desired
+            attributes below; an empty object is not a complete deployment
+            configuration.
+          </p>
+        </div>
+
+        {Object.keys(desired).length === 0 ? (
+          <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-sm text-amber-200">
             No desired attributes were specified.
           </p>
+        ) : (
+          <pre className="overflow-x-auto whitespace-pre-wrap wrap-break-word rounded-lg border border-white/8 bg-black/20 p-3 text-xs leading-5 text-slate-300">
+            {JSON.stringify(desired, null, 2)}
+          </pre>
         )}
       </div>
     );
@@ -84,74 +187,137 @@ function StateComparison({
 
   if (operation.action === "delete") {
     return (
-      <div className="rounded-lg border border-red-500/15 bg-red-500/5 p-3">
-        <p className="mb-2 text-xs font-medium text-red-300">
-          Resource marked for deletion
-        </p>
-        <pre className="overflow-x-auto whitespace-pre-wrap wrap-break-word text-xs leading-5 text-slate-300">
-          {JSON.stringify(observed, null, 2)}
-        </pre>
-        {!operation.observed && (
-          <p className="text-xs text-slate-500">
-            No observed attributes were provided.
+      <div className="space-y-3">
+        <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-3">
+          <p className="text-sm font-medium text-red-300">
+            Resource marked for deletion
           </p>
+          <p className="mt-1 text-xs leading-5 text-slate-400">
+            Review the observed attributes to understand which resource is
+            targeted.
+          </p>
+        </div>
+
+        {!observedResource ? (
+          <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-sm text-amber-200">
+            No observed resource details were returned. Confirm the target
+            before relying on this proposal.
+          </p>
+        ) : (
+          <pre className="overflow-x-auto whitespace-pre-wrap wrap-break-word rounded-lg border border-white/8 bg-black/20 p-3 text-xs leading-5 text-slate-300">
+            {JSON.stringify(observed, null, 2)}
+          </pre>
         )}
       </div>
     );
   }
 
-  if (keys.length === 0) {
+  if (!observedResource && !desiredResource) {
     return (
-      <p className="text-sm text-slate-500">
-        No attribute details were provided for this update.
+      <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-sm text-amber-200">
+        Neither desired nor observed resource details were returned for this
+        update. There is not enough information to compare attributes.
       </p>
     );
   }
 
-  return (
-    <div className="overflow-hidden rounded-lg border border-white/8">
-      <div className="grid grid-cols-2 border-b border-white/8 bg-white/3">
-        <p className="px-3 py-2 text-xs font-medium text-slate-400">Observed</p>
-        <p className="border-l border-white/8 px-3 py-2 text-xs font-medium text-slate-400">
-          Desired
+  if (!observedResource) {
+    return (
+      <div className="space-y-3">
+        <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-sm text-amber-200">
+          Observed state is unavailable for this operation. The empty observed
+          attributes below are not evidence that the actual resource has no
+          attributes.
         </p>
+
+        <div>
+          <p className="mb-2 text-xs font-medium text-slate-400">
+            Desired attributes
+          </p>
+          <pre className="overflow-x-auto whitespace-pre-wrap wrap-break-word rounded-lg border border-white/8 bg-black/20 p-3 text-xs leading-5 text-slate-300">
+            {JSON.stringify(desired, null, 2)}
+          </pre>
+        </div>
+      </div>
+    );
+  }
+
+  if (changes.length === 0) {
+    return (
+      <p className="rounded-lg border border-white/8 bg-white/2 p-3 text-sm text-slate-400">
+        No attributes were returned for comparison. Check the resource details
+        before concluding that the states match.
+      </p>
+    );
+  }
+
+  const counts = {
+    added: changes.filter((change) => change.status === "added").length,
+    changed: changes.filter((change) => change.status === "changed").length,
+    removed: changes.filter((change) => change.status === "removed").length,
+    unchanged: changes.filter((change) => change.status === "unchanged").length,
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-2">
+        {(["added", "changed", "removed", "unchanged"] as const).map(
+          (status) => (
+            <span
+              key={status}
+              className={`rounded-full border px-2.5 py-1 text-xs ${statusStyles[status]}`}
+            >
+              {statusLabels[status]}: {counts[status]}
+            </span>
+          ),
+        )}
       </div>
 
-      {keys.map((key) => {
-        const hasObserved = Object.hasOwn(observed, key);
-        const hasDesired = Object.hasOwn(desired, key);
-        const changed =
-          hasObserved !== hasDesired ||
-          displayValue(observed[key]) !== displayValue(desired[key]);
+      <div className="overflow-hidden rounded-lg border border-white/8">
+        <div className="grid grid-cols-2 border-b border-white/8 bg-white/3">
+          <p className="px-3 py-2 text-xs font-medium text-slate-400">
+            Observed
+          </p>
+          <p className="border-l border-white/8 px-3 py-2 text-xs font-medium text-slate-400">
+            Desired
+          </p>
+        </div>
 
-        return (
+        {changes.map((change) => (
           <div
-            key={key}
+            key={change.key}
             className="grid grid-cols-2 border-b border-white/5 last:border-0"
           >
             <div className="min-w-0 p-3">
-              <p className="mb-1 wrap-break-word text-xs text-slate-500">
-                {key}
+              <p className="mb-1 break-all text-xs text-slate-500">
+                {change.key}
               </p>
               <pre className="whitespace-pre-wrap wrap-break-word text-xs leading-5 text-slate-300">
-                {hasObserved ? displayValue(observed[key]) : "Not present"}
+                {change.status === "added"
+                  ? "Not present"
+                  : displayValue(change.observed)}
               </pre>
             </div>
-            <div
-              className={`min-w-0 border-l border-white/8 p-3 ${
-                changed ? "bg-sky-500/4" : ""
-              }`}
-            >
-              <p className="mb-1 wrap-break-word text-xs text-slate-500">
-                {key}
-              </p>
+
+            <div className="min-w-0 border-l border-white/8 p-3">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <p className="break-all text-xs text-slate-500">{change.key}</p>
+                <span
+                  className={`rounded-full border px-2 py-0.5 text-[10px] ${statusStyles[change.status]}`}
+                >
+                  {statusLabels[change.status]}
+                </span>
+              </div>
+
               <pre className="whitespace-pre-wrap wrap-break-word text-xs leading-5 text-slate-300">
-                {hasDesired ? displayValue(desired[key]) : "Not present"}
+                {change.status === "removed"
+                  ? "Not present in desired state"
+                  : displayValue(change.desired)}
               </pre>
             </div>
           </div>
-        );
-      })}
+        ))}
+      </div>
     </div>
   );
 }
