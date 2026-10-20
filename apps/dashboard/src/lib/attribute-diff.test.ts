@@ -44,31 +44,86 @@ describe("getAttributeChanges", () => {
     ]);
   });
 
-  it("compares nested objects and arrays by value", () => {
-    const observed = {
-      settings: { retries: 3, enabled: true },
-      regions: ["ap-south-1", "us-east-1"],
-    };
-
-    const desired = {
-      settings: { enabled: true, retries: 3 },
-      regions: ["ap-south-1", "us-east-1"],
-    };
-
-    expect(
-      getAttributeChanges(observed, desired).every(
-        (change) => change.status === "unchanged",
-      ),
-    ).toBe(true);
-
-    const modified = getAttributeChanges(observed, {
-      settings: { enabled: true, retries: 4 },
-      regions: ["ap-south-1", "us-east-1"],
-    });
-
-    expect(modified.find((change) => change.key === "settings")?.status).toBe(
-      "changed",
+  it("reports nested field-level changes using dotted paths", () => {
+    const changes = getAttributeChanges(
+      {
+        settings: { retries: 3, enabled: true, legacy: "old" },
+        regions: ["ap-south-1", "us-east-1"],
+      },
+      {
+        settings: { retries: 4, enabled: true, timeout: 30 },
+        regions: ["ap-south-1", "us-east-1"],
+      },
     );
+
+    expect(changes).toEqual([
+      {
+        key: "regions",
+        status: "unchanged",
+        observed: ["ap-south-1", "us-east-1"],
+        desired: ["ap-south-1", "us-east-1"],
+      },
+      {
+        key: "settings.enabled",
+        status: "unchanged",
+        observed: true,
+        desired: true,
+      },
+      {
+        key: "settings.legacy",
+        status: "removed",
+        observed: "old",
+        desired: undefined,
+      },
+      {
+        key: "settings.retries",
+        status: "changed",
+        observed: 3,
+        desired: 4,
+      },
+      {
+        key: "settings.timeout",
+        status: "added",
+        observed: undefined,
+        desired: 30,
+      },
+    ]);
+  });
+
+  it("handles nested empty objects, nulls, and arrays atomically", () => {
+    const changes = getAttributeChanges(
+      {
+        settings: {},
+        nullable: null,
+        rules: [{ enabled: true }],
+      },
+      {
+        settings: {},
+        nullable: null,
+        rules: [{ enabled: false }],
+      },
+    );
+
+    expect(changes).toEqual([
+      {
+        key: "nullable",
+        status: "unchanged",
+        observed: null,
+        desired: null,
+      },
+      {
+        key: "rules",
+        status: "changed",
+        observed: [{ enabled: true }],
+        desired: [{ enabled: false }],
+      },
+      {
+        key: "settings",
+        status: "unchanged",
+        observed: {},
+        desired: {},
+      },
+    ]);
   });
 
   it("distinguishes null from missing attributes", () => {

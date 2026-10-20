@@ -38,10 +38,6 @@ function resourceKey(resource: { type: string; id: string }): string {
   return JSON.stringify([resource.type, resource.id]);
 }
 
-function operationLabel(item: EvaluatedOperation): string {
-  return `${item.operation.action.toUpperCase()} ${item.operation.resource.type}: ${item.operation.resource.id}`;
-}
-
 function displayValue(value: unknown): string {
   if (value === undefined) return "Not specified";
   if (value === null) return "null";
@@ -49,57 +45,6 @@ function displayValue(value: unknown): string {
   if (typeof value === "string") return value;
 
   return JSON.stringify(value, null, 2);
-}
-
-function valuesEqual(a: unknown, b: unknown): boolean {
-  if (Object.is(a, b)) return true;
-
-  if (
-    a === null ||
-    b === null ||
-    typeof a !== "object" ||
-    typeof b !== "object"
-  ) {
-    return false;
-  }
-
-  if (Array.isArray(a) !== Array.isArray(b)) return false;
-
-  if (Array.isArray(a) && Array.isArray(b)) {
-    return (
-      a.length === b.length &&
-      a.every((value, index) => valuesEqual(value, b[index]))
-    );
-  }
-
-  if (!Array.isArray(a) && !Array.isArray(b)) {
-    const aRecord = a as Record<string, unknown>;
-    const bRecord = b as Record<string, unknown>;
-    const aKeys = Object.keys(aRecord);
-    const bKeys = Object.keys(bRecord);
-
-    return (
-      aKeys.length === bKeys.length &&
-      aKeys.every(
-        (key) =>
-          Object.hasOwn(bRecord, key) &&
-          valuesEqual(aRecord[key], bRecord[key]),
-      )
-    );
-  }
-
-  return false;
-}
-
-function DetailRow({ label, value }: { label: string; value: unknown }) {
-  return (
-    <div className="grid gap-1 border-b border-white/5 py-3 last:border-0 sm:grid-cols-[140px_1fr]">
-      <dt className="text-xs text-slate-500">{label}</dt>
-      <dd className="min-w-0 whitespace-pre-wrap wrap-break-word text-sm text-slate-300">
-        {displayValue(value)}
-      </dd>
-    </div>
-  );
 }
 
 function StateComparison({
