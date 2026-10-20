@@ -1,3 +1,5 @@
+import { PlanOperation } from "@cloudpilot/domain";
+
 export type ResourceState = {
   resource: {
     type: string;
@@ -12,16 +14,7 @@ export type DesiredState = {
 };
 
 export type EvaluatedOperation = {
-  operation: {
-    action: "create" | "update" | "delete";
-    resource: {
-      type: string;
-      id: string;
-    };
-    desired?: ResourceState;
-    observed?: ResourceState;
-    dependencies: Array<{ type: string; id: string }>;
-  };
+  operation: PlanOperation;
   policy: Record<string, unknown>;
   risk: Record<string, unknown>;
   approval: Record<string, unknown>;

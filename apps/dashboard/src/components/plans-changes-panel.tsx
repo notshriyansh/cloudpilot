@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import type { EvaluatedOperation, EvaluatedPlan } from "@/lib/desired-state";
 import { AttributeChange, getAttributeChanges } from "@/lib/attribute-diff";
+import { buildOperationSummary } from "@/lib/operation-summary";
 
 type Props = {
   evaluation: EvaluatedPlan | null;
@@ -287,6 +288,12 @@ function OperationCard({
         >
           {readinessLabels[item.readiness]}
         </span>
+      </div>
+
+      <div className="border-t border-white/6 px-4 py-3 sm:px-5">
+        <p className="text-sm leading-6 text-slate-300">
+          {buildOperationSummary(operation)}
+        </p>
       </div>
 
       <div className="grid gap-3 border-t border-white/6 p-4 sm:grid-cols-3 sm:p-5">
