@@ -7,6 +7,7 @@ interface ExecutionRunRow {
   completed_at: string | null;
   status: ExecutionRecord["status"];
   summary_json: string | null;
+  verification_json: string | null;
 }
 
 export function createD1ExecutionStore(db: D1Database): ExecutionStore {
@@ -15,16 +16,18 @@ export function createD1ExecutionStore(db: D1Database): ExecutionStore {
       await db
         .prepare(
           `INSERT INTO execution_runs (
-        id,
-        started_at,
-        completed_at,
-        status,
-        summary_json
-      ) VALUES (?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET
-        completed_at = excluded.completed_at,
-        status = excluded.status,
-        summary_json = excluded.summary_json`,
+            id,
+            started_at,
+            completed_at,
+            status,
+            summary_json,
+            verification_json
+          ) VALUES (?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            completed_at = excluded.completed_at,
+            status = excluded.status,
+            summary_json = excluded.summary_json,
+            verification_json = excluded.verification_json`,
         )
         .bind(
           execution.id,
@@ -34,6 +37,9 @@ export function createD1ExecutionStore(db: D1Database): ExecutionStore {
           execution.summary === undefined
             ? null
             : JSON.stringify(execution.summary),
+          execution.verification === undefined
+            ? null
+            : JSON.stringify(execution.verification),
         )
         .run();
     },
@@ -46,7 +52,8 @@ export function createD1ExecutionStore(db: D1Database): ExecutionStore {
             started_at,
             completed_at,
             status,
-            summary_json
+            summary_json,
+            verification_json
           FROM execution_runs
           WHERE id = ?
           LIMIT 1`,
@@ -69,7 +76,8 @@ export function createD1ExecutionStore(db: D1Database): ExecutionStore {
             started_at,
             completed_at,
             status,
-            summary_json
+            summary_json,
+            verification_json
           FROM execution_runs
           ORDER BY started_at DESC, id DESC
           LIMIT 1`,
@@ -99,6 +107,13 @@ function deserializeExecution(row: ExecutionRunRow): ExecutionRecord {
       ? {}
       : {
           summary: JSON.parse(row.summary_json),
+        }),
+    ...(row.verification_json === null
+      ? {}
+      : {
+          verification: JSON.parse(
+            row.verification_json,
+          ) as ExecutionRecord["verification"],
         }),
   };
 }
