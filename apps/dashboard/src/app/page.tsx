@@ -15,18 +15,21 @@ import {
   RefreshCw,
   ShieldCheck,
   Terminal,
+  Search,
 } from "lucide-react";
 import { DesiredStatePanel } from "@/components/desired-state-panel";
 import { PlansChangesPanel } from "@/components/plans-changes-panel";
 import type { EvaluatedPlan } from "@/lib/desired-state";
+import {
+  filterInventoryResources,
+  getResourceDisplayName,
+  getSafeResourceAttributes,
+  RESOURCE_TYPES,
+  type InventoryResource,
+  type InventoryResourceType,
+} from "@/lib/resource-inventory";
 
-type Resource = {
-  resource?: {
-    type?: string;
-    id?: string;
-  };
-  attributes?: Record<string, unknown>;
-};
+type Resource = InventoryResource;
 
 type Observation = {
   id: string;
@@ -51,6 +54,13 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [evaluation, setEvaluation] = useState<EvaluatedPlan | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [resourceType, setResourceType] = useState<
+    InventoryResourceType | "all"
+  >("all");
+  const [selectedResourceKey, setSelectedResourceKey] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -132,8 +142,26 @@ export default function DashboardPage() {
   }
 
   const resources = observation?.state?.resources ?? [];
-  const count = (type: string) =>
+  const count = (type: InventoryResourceType) =>
     resources.filter((item) => item.resource?.type === type).length;
+
+  const filteredResources = filterInventoryResources(
+    resources as InventoryResource[],
+    searchQuery,
+    resourceType,
+  );
+
+  const selectedResource =
+    filteredResources.find(
+      (item) =>
+        `${item.resource.type}:${item.resource.id}` === selectedResourceKey,
+    ) ??
+    filteredResources[0] ??
+    null;
+
+  const safeAttributes = selectedResource
+    ? getSafeResourceAttributes(selectedResource.attributes)
+    : {};
 
   const cards = [
     {
@@ -146,11 +174,20 @@ export default function DashboardPage() {
       value: observation ? count("worker") : "—",
       icon: Terminal,
     },
-    { label: "Zones", value: observation ? count("zone") : "—", icon: Network },
+    {
+      label: "Zones",
+      value: observation ? count("zone") : "—",
+      icon: Network,
+    },
     {
       label: "DNS records",
       value: observation ? count("dns_record") : "—",
       icon: Activity,
+    },
+    {
+      label: "KV namespaces",
+      value: observation ? count("kv_namespace") : "—",
+      icon: Cloud,
     },
   ];
 
@@ -323,6 +360,48 @@ export default function DashboardPage() {
               )}
             </div>
 
+            {observation && (
+              <div className="flex flex-col gap-3 border-b border-white/[0.07] p-5 sm:flex-row">
+                <label className="relative block min-w-0 flex-1">
+                  <span className="sr-only">
+                    Search infrastructure resources
+                  </span>
+                  <Search
+                    size={16}
+                    aria-hidden="true"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
+                  />
+                  <input
+                    type="search"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Search by name, identifier, or type..."
+                    className="h-10 w-full rounded-lg border border-white/10 bg-black/20 pl-9 pr-3 text-sm text-slate-200 outline-none placeholder:text-slate-600 focus:border-indigo-400/60"
+                  />
+                </label>
+
+                <label className="flex items-center gap-3 text-sm text-slate-400">
+                  <span>Type</span>
+                  <select
+                    value={resourceType}
+                    onChange={(event) =>
+                      setResourceType(
+                        event.target.value as InventoryResourceType | "all",
+                      )
+                    }
+                    className="h-10 min-w-40 rounded-lg border border-white/10 bg-[#0c0e14] px-3 text-sm text-slate-200 outline-none focus:border-indigo-400/60"
+                  >
+                    <option value="all">All resources</option>
+                    {RESOURCE_TYPES.map((type) => (
+                      <option key={type} value={type}>
+                        {type.replaceAll("_", " ")}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            )}
+
             {!observation && !loading ? (
               <div className="flex min-h-64 flex-col items-center justify-center px-6 text-center">
                 <div className="flex size-12 items-center justify-center rounded-xl border border-white/8 bg-white/3">
@@ -341,52 +420,148 @@ export default function DashboardPage() {
                 <LoaderCircle size={18} className="animate-spin" />
                 Querying the control plane...
               </div>
-            ) : resources.length === 0 ? (
-              <div className="p-10 text-center text-sm text-slate-400">
-                The inspection completed successfully and returned no resources.
+            ) : filteredResources.length === 0 ? (
+              <div className="p-10 text-center">
+                <p className="text-sm font-medium text-slate-200">
+                  {resources.length === 0
+                    ? "No resources discovered"
+                    : "No matching resources"}
+                </p>
+                <p className="mt-2 text-sm text-slate-500">
+                  {resources.length === 0
+                    ? "The inspection completed successfully but returned no resources."
+                    : "Try another search term or resource type."}
+                </p>
+                {resources.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery("");
+                      setResourceType("all");
+                      setSelectedResourceKey(null);
+                    }}
+                    className="mt-4 rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-300 hover:bg-white/5"
+                  >
+                    Clear filters
+                  </button>
+                )}
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead className="border-b border-white/6 text-xs text-slate-500">
-                    <tr>
-                      <th className="px-5 py-3 font-medium">Resource</th>
-                      <th className="px-5 py-3 font-medium">Type</th>
-                      <th className="px-5 py-3 font-medium">Identifier</th>
-                      <th className="px-5 py-3 font-medium">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {resources.map((item, index) => (
-                      <tr
-                        key={`${item.resource?.type ?? "resource"}-${item.resource?.id ?? index}`}
-                        className="transition hover:bg-white/2"
-                      >
-                        <td className="px-5 py-4 font-medium">
-                          {String(
-                            item.attributes?.name ??
-                              item.attributes?.hostname ??
-                              item.resource?.id ??
-                              "Unnamed resource",
-                          )}
-                        </td>
-                        <td className="px-5 py-4 text-slate-400">
-                          {item.resource?.type ?? "Unknown"}
-                        </td>
-                        <td className="px-5 py-4 font-mono text-xs text-slate-500">
-                          {item.resource?.id ?? "—"}
-                        </td>
-                        <td className="px-5 py-4">
-                          <span className="inline-flex items-center gap-1.5 text-xs text-emerald-400">
-                            <span className="size-1.5 rounded-full bg-emerald-400" />
-                            Observed
-                          </span>
-                        </td>
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="border-b border-white/6 text-xs text-slate-500">
+                      <tr>
+                        <th className="px-5 py-3 font-medium">Resource</th>
+                        <th className="px-5 py-3 font-medium">Type</th>
+                        <th className="px-5 py-3 font-medium">Identifier</th>
+                        <th className="px-5 py-3 font-medium">Status</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {filteredResources.map((item, index) => (
+                        <tr
+                          key={`${item.resource?.type ?? "resource"}-${item.resource?.id ?? index}`}
+                          className="transition hover:bg-white/2"
+                        >
+                          <td className="px-5 py-4 font-medium">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setSelectedResourceKey(
+                                  `${item.resource.type}:${item.resource.id}`,
+                                )
+                              }
+                              aria-pressed={
+                                `${selectedResource?.resource.type}:${selectedResource?.resource.id}` ===
+                                `${item.resource.type}:${item.resource.id}`
+                              }
+                              className="max-w-full wrap-break-word text-left text-slate-200 hover:text-indigo-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-400"
+                            >
+                              {getResourceDisplayName(item)}
+                            </button>
+                          </td>
+                          <td className="px-5 py-4 text-slate-400">
+                            {item.resource?.type ?? "Unknown"}
+                          </td>
+                          <td className="px-5 py-4 font-mono text-xs text-slate-500">
+                            {item.resource?.id ?? "—"}
+                          </td>
+                          <td className="px-5 py-4">
+                            <span className="inline-flex items-center gap-1.5 text-xs text-emerald-400">
+                              <span className="size-1.5 rounded-full bg-emerald-400" />
+                              Observed
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {selectedResource && (
+                  <div className="border-t border-white/[0.07] p-5">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-medium uppercase tracking-wider text-indigo-300">
+                          Selected resource
+                        </p>
+                        <h4 className="mt-2 wrap-break-word text-base font-semibold text-white">
+                          {getResourceDisplayName(selectedResource)}
+                        </h4>
+                        <p className="mt-1 break-all font-mono text-xs text-slate-500">
+                          {selectedResource.resource.type}:{" "}
+                          {selectedResource.resource.id}
+                        </p>
+                      </div>
+
+                      <span className="rounded-full border border-white/10 px-2.5 py-1 text-xs text-slate-400">
+                        Observed · read only
+                      </span>
+                    </div>
+
+                    <div className="mt-5">
+                      <h5 className="mb-3 text-xs font-medium uppercase tracking-wider text-slate-500">
+                        Resource attributes
+                      </h5>
+
+                      {Object.keys(safeAttributes).length === 0 ? (
+                        <p className="rounded-lg border border-white/8 bg-black/15 p-4 text-sm text-slate-500">
+                          No displayable attributes were returned.
+                        </p>
+                      ) : (
+                        <dl className="grid gap-3 sm:grid-cols-2">
+                          {Object.entries(safeAttributes).map(
+                            ([key, value]) => (
+                              <div
+                                key={key}
+                                className="min-w-0 rounded-lg border border-white/[0.07] bg-black/15 p-3"
+                              >
+                                <dt className="wrap-break-word text-xs text-slate-500">
+                                  {key}
+                                </dt>
+                                <dd className="mt-2 whitespace-pre-wrap wrap-break-word font-mono text-xs leading-5 text-slate-300">
+                                  {typeof value === "string"
+                                    ? value
+                                    : value === undefined
+                                      ? "Not specified"
+                                      : JSON.stringify(value, null, 2)}
+                                </dd>
+                              </div>
+                            ),
+                          )}
+                        </dl>
+                      )}
+                    </div>
+
+                    <p className="mt-4 text-xs leading-5 text-slate-500">
+                      These attributes reflect the latest saved observation.
+                      Observed presence does not establish resource health or
+                      configuration correctness.
+                    </p>
+                  </div>
+                )}
+              </>
             )}
           </section>
 

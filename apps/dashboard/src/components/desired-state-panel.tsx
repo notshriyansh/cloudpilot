@@ -26,32 +26,6 @@ async function readError(response: Response): Promise<string> {
   return body.error ?? `Request failed (${response.status})`;
 }
 
-function ReadinessBadge({
-  readiness,
-}: {
-  readiness: "ready" | "blocked" | "approval_required";
-}) {
-  const styles = {
-    ready: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
-    blocked: "border-red-500/30 bg-red-500/10 text-red-300",
-    approval_required: "border-amber-500/30 bg-amber-500/10 text-amber-300",
-  };
-
-  const labels = {
-    ready: "Ready",
-    blocked: "Blocked",
-    approval_required: "Approval required",
-  };
-
-  return (
-    <span
-      className={`inline-flex rounded-full border px-2.5 py-1 text-xs ${styles[readiness]}`}
-    >
-      {labels[readiness]}
-    </span>
-  );
-}
-
 type DesiredStatePanelProps = {
   onEvaluationChange: (evaluation: EvaluatedPlan | null) => void;
 };

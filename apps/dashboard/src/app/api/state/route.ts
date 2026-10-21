@@ -1,7 +1,6 @@
 ﻿import { NextResponse } from "next/server";
 
-export async function GET(request: Request) {
-  request.url;
+export async function GET() {
   const apiUrl = process.env.CLOUDPILOT_API_URL;
   const apiToken = process.env.CLOUDPILOT_API_TOKEN;
 
