@@ -135,4 +135,69 @@ describe("buildPlanReview", () => {
     expect(summary.blocked).toBe(1);
     expect(summary.approvalRequired).toBe(1);
   });
+
+  it("summarizes mixed plans without losing individual attention items", () => {
+    const summary = buildPlanReview(
+      makePlan([
+        makeOperation(),
+        makeOperation({
+          operation: {
+            action: "delete",
+            resource: { type: "dns_record", id: "api.example.com" },
+            observed: {
+              resource: {
+                type: "dns_record",
+                id: "api.example.com",
+              },
+              attributes: { content: "192.0.2.10" },
+            },
+            dependencies: [],
+          },
+          readiness: "blocked",
+          policy: { action: "deny", reason: "Deletion denied" },
+        }),
+        makeOperation({
+          operation: {
+            action: "update",
+            resource: { type: "worker", id: "billing-api" },
+            desired: {
+              resource: { type: "worker", id: "billing-api" },
+              attributes: { enabled: false },
+            },
+            dependencies: [],
+          },
+          readiness: "approval_required",
+          approval: {
+            requirement: "required",
+            reason: "Human approval is needed",
+          },
+        }),
+        makeOperation({
+          operation: {
+            action: "update",
+            resource: { type: "worker", id: "search-api" },
+            desired: {
+              resource: { type: "worker", id: "search-api" },
+              attributes: { enabled: false },
+            },
+            dependencies: [],
+          },
+        }),
+      ]),
+    );
+
+    expect(summary.status).toBe("blocked");
+    expect(summary.total).toBe(4);
+    expect(summary.ready).toBe(2);
+    expect(summary.blocked).toBe(1);
+    expect(summary.approvalRequired).toBe(1);
+
+    expect(summary.attentionItems).toHaveLength(3);
+    expect(summary.attentionItems.map((item) => item.index)).toEqual([1, 2, 3]);
+    expect(summary.attentionItems.map((item) => item.resource.id)).toEqual([
+      "api.example.com",
+      "billing-api",
+      "search-api",
+    ]);
+  });
 });

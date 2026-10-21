@@ -277,7 +277,10 @@ function OperationCard({
   }[operation.action];
 
   return (
-    <article className="rounded-xl border border-white/8 bg-[#0d1018]">
+    <article
+      id={`operation-${index + 1}`}
+      className="scroll-mt-24 rounded-xl border border-white/8 bg-[#0d1018]"
+    >
       <div className="flex flex-wrap items-start justify-between gap-3 p-4 sm:p-5">
         <div className="flex min-w-0 gap-3">
           <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-white/8 bg-white/3">
@@ -719,6 +722,15 @@ export function PlansChangesPanel({ evaluation }: Props) {
                         <p className="mt-1 text-xs leading-5 text-slate-500">
                           {item.explanation}
                         </p>
+                        <a
+                          href={`#operation-${item.index + 1}`}
+                          className="mt-3 inline-flex min-h-9 items-center rounded-md border border-white/10 px-3 py-1.5 text-xs font-medium text-indigo-300 transition-colors hover:border-indigo-400/40 hover:bg-indigo-400/10 hover:text-indigo-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-400"
+                        >
+                          Review operation
+                          <span className="ml-2" aria-hidden="true">
+                            →
+                          </span>
+                        </a>
                       </li>
                     ))}
                   </ul>
