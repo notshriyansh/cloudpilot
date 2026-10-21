@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { DesiredStatePanel } from "@/components/desired-state-panel";
 import { PlansChangesPanel } from "@/components/plans-changes-panel";
+import { ExecutionPanel } from "@/components/execution-panel";
 import type { EvaluatedPlan } from "@/lib/desired-state";
 import {
   filterInventoryResources,
@@ -569,22 +570,7 @@ export default function DashboardPage() {
 
           <PlansChangesPanel evaluation={evaluation} />
 
-          <section
-            id="executions"
-            className="scroll-mt-6 rounded-xl border border-white/[0.07] bg-[#10131b] p-5"
-          >
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <Activity size={17} className="text-indigo-400" />
-              Execution & verification
-            </div>
-            <p className="mt-3 text-sm leading-6 text-slate-500">
-              Review the latest execution, its outcome, and whether the
-              resulting infrastructure matches the desired state.
-            </p>
-            <p className="mt-4 text-xs text-slate-600">
-              Execution UI — next implementation checkpoint
-            </p>
-          </section>
+          <ExecutionPanel />
 
           <section
             id="policies"
