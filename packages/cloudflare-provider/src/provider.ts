@@ -6,6 +6,31 @@ import { CloudflareProviderError } from "./errors";
 import type { CloudflareZone } from "./zone";
 import type { CloudflareWorker, CloudflareWorkerDeployment } from "./worker";
 
+function getTotalPages(
+  resultInfo:
+    | { page: number; perPage: number; totalPages: number; total: number }
+    | undefined,
+  requestedPage: number,
+): number {
+  if (
+    resultInfo === undefined ||
+    !Number.isInteger(resultInfo.page) ||
+    resultInfo.page !== requestedPage ||
+    !Number.isInteger(resultInfo.perPage) ||
+    resultInfo.perPage <= 0 ||
+    !Number.isInteger(resultInfo.totalPages) ||
+    resultInfo.totalPages < 1 ||
+    !Number.isInteger(resultInfo.total) ||
+    resultInfo.total < 0
+  ) {
+    throw new CloudflareProviderError(
+      "Cloudflare API returned invalid pagination metadata",
+    );
+  }
+
+  return resultInfo.totalPages;
+}
+
 export interface CloudflareProvider {
   getAccount(): Promise<CloudflareAccount>;
   listZones(): Promise<CloudflareZone[]>;
@@ -90,10 +115,9 @@ export function createCloudflareProvider(
           });
         }
 
-        if (
-          response.resultInfo === undefined ||
-          page >= response.resultInfo.totalPages
-        ) {
+        const totalPages = getTotalPages(response.resultInfo, page);
+
+        if (page >= totalPages) {
           break;
         }
 
@@ -145,10 +169,9 @@ export function createCloudflareProvider(
           });
         }
 
-        if (
-          response.resultInfo === undefined ||
-          page >= response.resultInfo.totalPages
-        ) {
+        const totalPages = getTotalPages(response.resultInfo, page);
+
+        if (page >= totalPages) {
           break;
         }
 

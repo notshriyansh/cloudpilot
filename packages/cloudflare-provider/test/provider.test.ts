@@ -443,6 +443,66 @@ describe("CloudflareProvider", () => {
     );
   });
 
+  it("rejects zone responses without pagination metadata", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          result: [],
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    );
+
+    const provider = createCloudflareProvider(
+      {
+        accountId: "account-123",
+        apiToken: "test-token",
+      },
+      fetchMock,
+    );
+
+    await expect(provider.listZones()).rejects.toMatchObject({
+      name: "CloudflareProviderError",
+      message: "Cloudflare API returned invalid pagination metadata",
+    });
+  });
+
+  it("rejects DNS responses without pagination metadata", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          result: [],
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    );
+
+    const provider = createCloudflareProvider(
+      {
+        accountId: "account-123",
+        apiToken: "test-token",
+      },
+      fetchMock,
+    );
+
+    await expect(provider.listDnsRecords("zone-123")).rejects.toMatchObject({
+      name: "CloudflareProviderError",
+      message: "Cloudflare API returned invalid pagination metadata",
+    });
+  });
+
   it("lists zones across multiple pages", async () => {
     const fetchMock = vi
       .fn<typeof fetch>()
