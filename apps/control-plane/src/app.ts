@@ -585,6 +585,12 @@ export async function handleRequest(
       const executionId = crypto.randomUUID();
       const startedAt = new Date().toISOString();
 
+      let summary:
+        Awaited<ReturnType<typeof app.executionService.execute>> | undefined;
+
+      let verification:
+        Awaited<ReturnType<typeof app.verificationService.verify>> | undefined;
+
       await app.executionStore.saveExecution({
         id: executionId,
         startedAt,
@@ -592,11 +598,9 @@ export async function handleRequest(
       });
 
       try {
-        const summary = await app.executionService.execute(plan);
+        summary = await app.executionService.execute(plan);
 
-        const verification = await app.verificationService.verify(
-          result.state!,
-        );
+        verification = await app.verificationService.verify(result.state!);
 
         const completedAt = new Date().toISOString();
 
@@ -617,13 +621,13 @@ export async function handleRequest(
           verification,
         });
       } catch (executionError) {
-        const completedAt = new Date().toISOString();
-
         await app.executionStore.saveExecution({
           id: executionId,
           startedAt,
-          completedAt,
+          completedAt: new Date().toISOString(),
           status: "failed",
+          ...(summary ? { summary } : {}),
+          ...(verification ? { verification } : {}),
         });
 
         throw executionError;
