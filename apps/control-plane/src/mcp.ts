@@ -166,6 +166,12 @@ export async function updateDisposableWorker(
   const executionId = crypto.randomUUID();
   const startedAt = new Date().toISOString();
 
+  let summary:
+    Awaited<ReturnType<typeof app.executionService.execute>> | undefined;
+
+  let verification:
+    Awaited<ReturnType<typeof app.verificationService.verify>> | undefined;
+
   console.info("disposable_update: execution_started", { executionId });
 
   try {
@@ -187,7 +193,7 @@ export async function updateDisposableWorker(
       executionId,
     });
 
-    const summary = await app.executionService.execute(plan);
+    summary = await app.executionService.execute(plan);
 
     console.info("disposable_update: execution_call_completed", {
       executionId,
@@ -233,7 +239,7 @@ export async function updateDisposableWorker(
       ),
     };
 
-    const verification = await app.verificationService.verify(
+    verification = await app.verificationService.verify(
       desiredState,
       scopedObservedState,
     );
@@ -291,6 +297,8 @@ export async function updateDisposableWorker(
         startedAt,
         completedAt: new Date().toISOString(),
         status: "failed",
+        ...(summary ? { summary } : {}),
+        ...(verification ? { verification } : {}),
       });
 
       console.info("disposable_update: failure_persist_completed", {

@@ -224,7 +224,19 @@ describe("updateDisposableWorker", () => {
 
     expect(result.isError).toBe(true);
     expect(app.verificationService.verify).not.toHaveBeenCalled();
-    expect(app.executionStore.getLatestExecution).toBeDefined();
+    const record = await app.executionStore.getLatestExecution();
+
+    expect(record).toMatchObject({
+      status: "failed",
+      summary: {
+        status: "failed",
+        completed: 0,
+        failed: 1,
+        skipped: 0,
+      },
+    });
+
+    expect(record?.verification).toBeUndefined();
   });
 
   it("reports an error when verification does not confirm the desired state", async () => {
@@ -247,5 +259,31 @@ describe("updateDisposableWorker", () => {
 
     expect(result.isError).toBe(true);
     expect(app.executionService.execute).toHaveBeenCalledOnce();
+  });
+
+  it("preserves the execution summary when verification throws", async () => {
+    const app = createTestApp();
+
+    vi.mocked(app.verificationService.verify).mockRejectedValue(
+      new Error("verification failed"),
+    );
+
+    const result = await updateDisposableWorker(app, workerId, input);
+
+    expect(result.isError).toBe(true);
+
+    const record = await app.executionStore.getLatestExecution();
+
+    expect(record).toMatchObject({
+      status: "failed",
+      summary: {
+        status: "succeeded",
+        completed: 1,
+        failed: 0,
+        skipped: 0,
+      },
+    });
+
+    expect(record?.verification).toBeUndefined();
   });
 });

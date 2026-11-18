@@ -28,6 +28,9 @@ describe("apiEvaluation", () => {
             requirement: "none",
             reason: "Operation does not require human approval",
           },
+          executionSupport: {
+            supported: true,
+          },
           readiness: "ready",
         },
       ],
@@ -86,6 +89,9 @@ describe("apiEvaluation", () => {
           approval: {
             requirement: "none",
             reason: "Operation does not require human approval",
+          },
+          executionSupport: {
+            supported: true,
           },
           readiness: "ready",
         },

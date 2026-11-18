@@ -169,13 +169,15 @@ export default {
 
     const planning = vi.fn().mockResolvedValue(plan);
 
-    const execute = vi.fn().mockResolvedValue({
+    const summary = {
       status: "succeeded" as const,
       results: [],
       completed: 0,
       failed: 0,
       skipped: 0,
-    });
+    };
+
+    const execute = vi.fn().mockResolvedValue(summary);
 
     const evaluate = vi.fn().mockResolvedValue({
       operations: [],
@@ -222,6 +224,15 @@ export default {
 
     expect(execute).toHaveBeenCalledOnce();
     expect(verify).toHaveBeenCalledOnce();
+
+    const record = await executionStore.getLatestExecution();
+
+    expect(record).toMatchObject({
+      status: "failed",
+      summary,
+    });
+
+    expect(record?.verification).toBeUndefined();
   });
 
   it("returns 400 for invalid JSON on POST /execute", async () => {
@@ -367,6 +378,15 @@ export default {
     await expect(response.json()).resolves.toEqual({
       error: "Execution failed",
     });
+
+    const record = await executionStore.getLatestExecution();
+
+    expect(record).toMatchObject({
+      status: "failed",
+    });
+
+    expect(record?.summary).toBeUndefined();
+    expect(record?.verification).toBeUndefined();
   });
 
   it("does not execute when evaluation blocks an operation", async () => {
@@ -429,7 +449,7 @@ export default {
     expect(response.status).toBe(403);
 
     expect(await response.json()).toEqual({
-      error: "Execution blocked by policy",
+      error: "Execution blocked by policy or unsupported execution capability",
       operations: [
         expect.objectContaining({
           readiness: "blocked",

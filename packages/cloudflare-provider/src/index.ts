@@ -10,3 +10,4 @@ export {
   createCloudflareOperationExecutor,
   type CloudflareOperationExecutor,
 } from "./operation-executor";
+export { createCloudflareExecutionCapability } from "./operation-executor";

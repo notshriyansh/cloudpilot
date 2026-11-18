@@ -11,6 +11,7 @@ export interface EvaluatedOperation {
   policy: PolicyDecision;
   risk: RiskAssessment;
   approval: ApprovalDecision;
+  executionSupport: ExecutionSupport;
   readiness: ExecutionReadiness;
 }
 
@@ -24,10 +25,20 @@ export interface PlanEvaluator {
 
 export type ExecutionReadiness = "ready" | "blocked" | "approval_required";
 
+export interface ExecutionSupport {
+  supported: boolean;
+  reason?: string;
+}
+
+export type ExecutionCapability = (
+  operation: PlanOperation,
+) => ExecutionSupport;
+
 export function createPlanEvaluator(
   policy: Policy,
   riskEvaluator: RiskEvaluator,
   approvalEvaluator: ApprovalEvaluator,
+  executionCapability: ExecutionCapability = () => ({ supported: true }),
 ): PlanEvaluator {
   return {
     evaluate(plan) {
@@ -51,6 +62,7 @@ export function createPlanEvaluator(
             policy,
             riskEvaluator,
             approvalEvaluator,
+            executionCapability,
           ),
         ),
       };
@@ -61,8 +73,9 @@ export function createPlanEvaluator(
 function determineExecutionReadiness(
   policy: PolicyDecision,
   approval: ApprovalDecision,
+  executionSupport: ExecutionSupport,
 ): ExecutionReadiness {
-  if (policy.action === "deny") {
+  if (policy.action === "deny" || !executionSupport.supported) {
     return "blocked";
   }
 
@@ -79,6 +92,7 @@ function evaluateOperation(
   policy: Policy,
   riskEvaluator: RiskEvaluator,
   approvalEvaluator: ApprovalEvaluator,
+  executionCapability: ExecutionCapability,
 ): EvaluatedOperation {
   const policyDecision = policy.evaluate(operation, context);
   const riskAssessment = riskEvaluator.assess(operation, context);
@@ -87,9 +101,12 @@ function evaluateOperation(
     riskAssessment,
   );
 
+  const executionSupport = executionCapability(operation);
+
   const readiness = determineExecutionReadiness(
     policyDecision,
     approvalDecision,
+    executionSupport,
   );
 
   return {
@@ -97,6 +114,7 @@ function evaluateOperation(
     policy: policyDecision,
     risk: riskAssessment,
     approval: approvalDecision,
+    executionSupport,
     readiness,
   };
 }

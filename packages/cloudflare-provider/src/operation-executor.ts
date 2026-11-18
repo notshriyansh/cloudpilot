@@ -1,5 +1,7 @@
 import type {
+  ExecutionCapability,
   ExecutionResult,
+  ExecutionSupport,
   OperationExecutor,
   PlanOperation,
 } from "@cloudpilot/domain";
@@ -32,3 +34,31 @@ export function createCloudflareOperationExecutor(
     },
   };
 }
+
+export const createCloudflareExecutionCapability =
+  (): ExecutionCapability =>
+  (operation): ExecutionSupport => {
+    switch (operation.resource.type) {
+      case "worker":
+        return { supported: true };
+
+      case "zone":
+        return {
+          supported: false,
+          reason:
+            "Zone operations are not supported by the Cloudflare executor.",
+        };
+
+      case "dns_record":
+        return {
+          supported: false,
+          reason:
+            "DNS record operations are not supported by the Cloudflare executor.",
+        };
+    }
+
+    return {
+      supported: false,
+      reason: "This resource type is not supported by the Cloudflare executor.",
+    };
+  };
