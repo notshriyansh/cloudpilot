@@ -53,8 +53,12 @@ const navigation = [
 
 export default function DashboardPage() {
   const [observation, setObservation] = useState<Observation | null>(null);
+  const [initializing, setInitializing] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorSource, setErrorSource] = useState<"saved-state" | "inspection">(
+    "inspection",
+  );
   const [evaluation, setEvaluation] = useState<EvaluatedPlan | null>(null);
   const policySummary = buildPolicySummary(evaluation);
   const [searchQuery, setSearchQuery] = useState("");
@@ -95,11 +99,16 @@ export default function DashboardPage() {
         }
       } catch (err) {
         if (!cancelled) {
+          setErrorSource("saved-state");
           setError(
             err instanceof Error
               ? err.message
               : "Unable to load saved infrastructure state.",
           );
+        }
+      } finally {
+        if (!cancelled) {
+          setInitializing(false);
         }
       }
     }
@@ -112,8 +121,11 @@ export default function DashboardPage() {
   }, []);
 
   async function inspectInfrastructure() {
+    if (loading || initializing) return;
+
     setLoading(true);
     setError(null);
+    setErrorSource("inspection");
 
     try {
       const response = await fetch("/api/inspect", {
@@ -266,10 +278,20 @@ export default function DashboardPage() {
             <span className="hidden items-center gap-2 rounded-full border border-white/8 px-3 py-1.5 text-xs text-slate-400 sm:flex">
               <span
                 className={`size-1.5 rounded-full ${
-                  observation ? "bg-emerald-400" : "bg-slate-500"
+                  initializing || loading
+                    ? "bg-amber-400"
+                    : observation
+                      ? "bg-emerald-400"
+                      : "bg-slate-500"
                 }`}
               />
-              {observation ? "Inspection completed" : "Awaiting inspection"}
+              {initializing
+                ? "Loading saved state"
+                : loading
+                  ? "Inspection in progress"
+                  : observation
+                    ? "Saved observation available"
+                    : "Awaiting inspection"}
             </span>
             <div className="flex size-9 items-center justify-center rounded-full border border-white/10 bg-white/4 text-xs font-medium">
               CP
@@ -294,7 +316,7 @@ export default function DashboardPage() {
             <button
               type="button"
               onClick={inspectInfrastructure}
-              disabled={loading}
+              disabled={loading || initializing}
               className="inline-flex h-11 items-center justify-center gap-2 self-start rounded-lg bg-indigo-500 px-4 text-sm font-medium text-white transition hover:bg-indigo-400 disabled:cursor-wait disabled:opacity-60 sm:self-auto"
             >
               {loading ? (
@@ -302,7 +324,11 @@ export default function DashboardPage() {
               ) : (
                 <RefreshCw size={16} />
               )}
-              {loading ? "Inspecting..." : "Inspect infrastructure"}
+              {initializing
+                ? "Loading saved state..."
+                : loading
+                  ? "Inspecting..."
+                  : "Inspect infrastructure"}
             </button>
           </div>
 
@@ -314,7 +340,9 @@ export default function DashboardPage() {
               <CircleAlert className="mt-0.5 shrink-0 text-red-400" size={18} />
               <div>
                 <p className="text-sm font-medium text-red-300">
-                  Inspection unsuccessful
+                  {errorSource === "saved-state"
+                    ? "Unable to load saved observation"
+                    : "Inspection unsuccessful"}
                 </p>
                 <p className="mt-1 text-sm text-slate-400">{error}</p>
               </div>
@@ -408,7 +436,17 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {!observation && !loading ? (
+            {initializing && !observation ? (
+              <div className="flex min-h-64 items-center justify-center gap-3 text-sm text-slate-400">
+                <LoaderCircle size={18} className="animate-spin" />
+                Loading the latest saved observation...
+              </div>
+            ) : !observation && loading ? (
+              <div className="flex min-h-64 items-center justify-center gap-3 text-sm text-slate-400">
+                <LoaderCircle size={18} className="animate-spin" />
+                Querying the control plane...
+              </div>
+            ) : !observation ? (
               <div className="flex min-h-64 flex-col items-center justify-center px-6 text-center">
                 <div className="flex size-12 items-center justify-center rounded-xl border border-white/8 bg-white/3">
                   <Cloud size={22} className="text-slate-400" />
@@ -420,11 +458,6 @@ export default function DashboardPage() {
                   Inspect your infrastructure to retrieve actual resources from
                   your configured Cloudflare account.
                 </p>
-              </div>
-            ) : loading ? (
-              <div className="flex min-h-64 items-center justify-center gap-3 text-sm text-slate-400">
-                <LoaderCircle size={18} className="animate-spin" />
-                Querying the control plane...
               </div>
             ) : filteredResources.length === 0 ? (
               <div className="p-10 text-center">
