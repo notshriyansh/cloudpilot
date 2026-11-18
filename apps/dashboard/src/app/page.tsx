@@ -62,6 +62,7 @@ export default function DashboardPage() {
   const [selectedResourceKey, setSelectedResourceKey] = useState<string | null>(
     null,
   );
+  const [activeSection, setActiveSection] = useState("overview");
 
   useEffect(() => {
     let cancelled = false;
@@ -216,13 +217,14 @@ export default function DashboardPage() {
               key={id}
               type="button"
               onClick={() => {
+                setActiveSection(id);
                 document.getElementById(id)?.scrollIntoView({
                   behavior: "smooth",
                   block: "start",
                 });
               }}
               className={`mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition ${
-                index === 0
+                activeSection === id
                   ? "bg-white/[0.07] text-white"
                   : "text-slate-400 hover:bg-white/4 hover:text-white"
               }`}
@@ -241,10 +243,11 @@ export default function DashboardPage() {
         <div className="mt-auto border-t border-white/[0.07] p-5">
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <span className="size-2 rounded-full bg-emerald-400" />
-            Dashboard available
+            Dashboard interface loaded
           </div>
           <p className="mt-2 text-[11px] leading-5 text-slate-600">
-            Control-plane connectivity is checked when you run an inspection.
+            Control-plane connectivity is checked when you inspect
+            infrastructure.
           </p>
         </div>
       </aside>
@@ -333,7 +336,7 @@ export default function DashboardPage() {
                   {observation ? (
                     <>
                       <CheckCircle2 size={13} className="text-emerald-400" />
-                      Live observation
+                      Latest saved observation
                     </>
                   ) : (
                     "Run an inspection to populate"
