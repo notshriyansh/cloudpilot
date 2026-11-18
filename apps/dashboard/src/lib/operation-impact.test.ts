@@ -17,6 +17,7 @@ function makeOperation(
     policy: { action: "allow", reason: "Test policy" },
     risk: { level: "low", reason: "Test risk" },
     approval: { requirement: "none", reason: "No approval required" },
+    executionSupport: { supported: true },
     readiness: "ready",
   };
 }

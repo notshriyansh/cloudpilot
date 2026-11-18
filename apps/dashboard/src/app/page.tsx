@@ -29,6 +29,7 @@ import {
   type InventoryResource,
   type InventoryResourceType,
 } from "@/lib/resource-inventory";
+import { buildPolicySummary } from "@/lib/policy-summary";
 
 type Resource = InventoryResource;
 
@@ -55,6 +56,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [evaluation, setEvaluation] = useState<EvaluatedPlan | null>(null);
+  const policySummary = buildPolicySummary(evaluation);
   const [searchQuery, setSearchQuery] = useState("");
   const [resourceType, setResourceType] = useState<
     InventoryResourceType | "all"
@@ -583,11 +585,146 @@ export default function DashboardPage() {
               <ShieldCheck size={17} className="text-indigo-400" />
               Policy and approval controls
             </div>
+
             <p className="mt-2 text-sm leading-6 text-slate-500">
-              Infrastructure changes remain subject to the existing
-              control-plane policy evaluation and approval requirements. This
-              dashboard does not bypass either check.
+              Summary of the latest desired-state evaluation. Policy decisions,
+              approval requirements, risk assessments, and provider execution
+              support are evaluated independently.
             </p>
+
+            {!policySummary ? (
+              <div className="mt-5 rounded-lg border border-dashed border-white/10 p-5">
+                <p className="text-sm font-medium text-slate-300">
+                  No evaluation available
+                </p>
+                <p className="mt-1 text-sm leading-5 text-slate-500">
+                  Save and evaluate a desired state to see policy decisions,
+                  risk levels, approval requirements, and execution readiness.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                    Evaluation summary
+                  </p>
+                  <span className="rounded-full border border-white/10 px-2.5 py-1 text-xs text-slate-400">
+                    {policySummary.total} operations
+                  </span>
+                </div>
+
+                <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="rounded-lg border border-white/[0.07] bg-black/15 p-4">
+                    <p className="text-xs text-slate-500">Policy decisions</p>
+                    <p className="mt-3 text-2xl font-semibold tabular-nums text-slate-100">
+                      {policySummary.policy.allowed}
+                      <span className="mx-1 text-sm font-normal text-slate-600">
+                        /
+                      </span>
+                      {policySummary.policy.denied}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Allowed / denied
+                    </p>
+                  </div>
+
+                  <div className="rounded-lg border border-white/[0.07] bg-black/15 p-4">
+                    <p className="text-xs text-slate-500">Approval required</p>
+                    <p className="mt-3 text-2xl font-semibold tabular-nums text-slate-100">
+                      {policySummary.approval.required}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {policySummary.approval.notRequired} not required
+                    </p>
+                  </div>
+
+                  <div className="rounded-lg border border-white/[0.07] bg-black/15 p-4">
+                    <p className="text-xs text-slate-500">
+                      Execution readiness
+                    </p>
+                    <p className="mt-3 text-2xl font-semibold tabular-nums text-slate-100">
+                      {policySummary.readiness.ready}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Ready operations
+                    </p>
+                  </div>
+
+                  <div className="rounded-lg border border-white/[0.07] bg-black/15 p-4">
+                    <p className="text-xs text-slate-500">
+                      Unsupported operations
+                    </p>
+                    <p className="mt-3 text-2xl font-semibold tabular-nums text-slate-100">
+                      {policySummary.execution.unsupported}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Not supported by the executor
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-lg border border-white/[0.07] p-4">
+                    <p className="text-sm font-medium text-slate-300">
+                      Risk distribution
+                    </p>
+                    <div className="mt-4 grid grid-cols-2 gap-3">
+                      {(
+                        [
+                          ["Low", policySummary.risk.low],
+                          ["Medium", policySummary.risk.medium],
+                          ["High", policySummary.risk.high],
+                          ["Critical", policySummary.risk.critical],
+                        ] as const
+                      ).map(([label, count]) => (
+                        <div key={label}>
+                          <p className="text-xs text-slate-500">{label}</p>
+                          <p className="mt-1 text-lg font-semibold tabular-nums text-slate-200">
+                            {count}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border border-white/[0.07] p-4">
+                    <p className="text-sm font-medium text-slate-300">
+                      Readiness breakdown
+                    </p>
+                    <div className="mt-4 space-y-3">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-400">Ready</span>
+                        <span className="tabular-nums text-slate-200">
+                          {policySummary.readiness.ready}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-400">Blocked</span>
+                        <span className="tabular-nums text-slate-200">
+                          {policySummary.readiness.blocked}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-400">
+                          Approval required
+                        </span>
+                        <span className="tabular-nums text-slate-200">
+                          {policySummary.readiness.approvalRequired}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <p className="mt-4 text-xs leading-5 text-slate-500">
+                  A blocked operation may be denied by policy or unsupported by
+                  the executor. Unsupported counts can overlap with blocked
+                  counts. Approval-required operations are not yet ready for
+                  execution. This summary is a preview and does not execute
+                  infrastructure changes.
+                </p>
+              </>
+            )}
           </section>
 
           {observation && (

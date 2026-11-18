@@ -33,6 +33,7 @@ function evaluatedOperation(
     },
     readiness: "ready",
     ...overrides,
+    executionSupport: overrides.executionSupport ?? { supported: true },
   };
 }
 

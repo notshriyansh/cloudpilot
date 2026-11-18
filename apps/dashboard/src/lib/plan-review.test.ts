@@ -24,6 +24,7 @@ function makeOperation(
     approval: { requirement: "none", reason: "No approval required" },
     readiness: "ready",
     ...overrides,
+    executionSupport: overrides.executionSupport ?? { supported: true },
   };
 }
 
