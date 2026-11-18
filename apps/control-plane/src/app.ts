@@ -1,4 +1,5 @@
 import {
+  createCloudflareExecutionCapability,
   createCloudflareOperationExecutor,
   createCloudflareProvider,
 } from "@cloudpilot/cloudflare-provider";
@@ -37,6 +38,7 @@ import {
   createDefaultPolicy,
   createDefaultRiskEvaluator,
   createPlanEvaluator,
+  type ExecutionCapability,
   type OperationExecutor,
   type PlanEvaluator,
 } from "@cloudpilot/domain";
@@ -76,6 +78,7 @@ export interface AppDependencies {
   idGenerator: IdGenerator;
   managementScopeStore: ManagementScopeStore;
   operationExecutor: OperationExecutor;
+  executionCapability?: ExecutionCapability;
   getWorkerScript: WorkerScriptReader;
 }
 
@@ -105,6 +108,7 @@ export function createApp(dependencies: AppDependencies): App {
     createDefaultPolicy(),
     createDefaultRiskEvaluator(),
     createDefaultApprovalEvaluator(),
+    dependencies.executionCapability,
   );
 
   const evaluationService = createEvaluationService(
@@ -174,6 +178,7 @@ export function createProductionApp(env: Env) {
     },
     managementScopeStore,
     operationExecutor,
+    executionCapability: createCloudflareExecutionCapability(),
     getWorkerScript: (scriptName) => provider.getWorkerScript(scriptName),
   });
 }
@@ -553,7 +558,8 @@ export async function handleRequest(
       if (blockedOperations.length > 0) {
         return Response.json(
           {
-            error: "Execution blocked by policy",
+            error:
+              "Execution blocked by policy or unsupported execution capability",
             operations: blockedOperations,
           },
           {

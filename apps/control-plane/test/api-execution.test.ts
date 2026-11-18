@@ -449,7 +449,7 @@ export default {
     expect(response.status).toBe(403);
 
     expect(await response.json()).toEqual({
-      error: "Execution blocked by policy",
+      error: "Execution blocked by policy or unsupported execution capability",
       operations: [
         expect.objectContaining({
           readiness: "blocked",

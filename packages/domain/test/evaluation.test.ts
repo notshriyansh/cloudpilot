@@ -294,4 +294,91 @@ describe("plan evaluation", () => {
       ],
     });
   });
+
+  it("blocks unsupported operations even when policy allows them", () => {
+    const plan: Plan = {
+      operations: [
+        {
+          action: "create",
+          resource: {
+            type: "dns_record",
+            id: "record-1",
+          },
+          dependencies: [],
+        },
+      ],
+    };
+
+    const evaluator = createPlanEvaluator(
+      createDefaultPolicy(),
+      createDefaultRiskEvaluator(),
+      createDefaultApprovalEvaluator(),
+      () => ({
+        supported: false,
+        reason: "DNS record operations are not supported by this executor.",
+      }),
+    );
+
+    const operation = evaluator.evaluate(plan).operations[0];
+
+    expect(operation.policy.action).toBe("allow");
+    expect(operation.executionSupport).toEqual({
+      supported: false,
+      reason: "DNS record operations are not supported by this executor.",
+    });
+    expect(operation.readiness).toBe("blocked");
+  });
+
+  it("blocks unsupported high-risk operations before approval can make them executable", () => {
+    const plan: Plan = {
+      operations: [
+        {
+          action: "delete",
+          resource: {
+            type: "dns_record",
+            id: "record-1",
+          },
+          dependencies: [],
+        },
+      ],
+    };
+
+    const evaluator = createPlanEvaluator(
+      createDefaultPolicy(),
+      createDefaultRiskEvaluator(),
+      createDefaultApprovalEvaluator(),
+      () => ({
+        supported: false,
+        reason: "DNS record operations are not supported by this executor.",
+      }),
+    );
+
+    const operation = evaluator.evaluate(plan).operations[0];
+
+    expect(operation.policy.action).toBe("allow");
+    expect(operation.risk.level).toBe("high");
+    expect(operation.approval.requirement).toBe("required");
+    expect(operation.executionSupport.supported).toBe(false);
+    expect(operation.readiness).toBe("blocked");
+  });
+
+  it("preserves the default execution capability for existing evaluator consumers", () => {
+    const plan: Plan = {
+      operations: [
+        {
+          action: "create",
+          resource: {
+            type: "dns_record",
+            id: "record-1",
+          },
+          dependencies: [],
+        },
+      ],
+    };
+
+    const operation = evaluator.evaluate(plan).operations[0];
+
+    expect(operation.executionSupport).toEqual({ supported: true });
+    expect(operation.readiness).toBe("ready");
+  });
 });

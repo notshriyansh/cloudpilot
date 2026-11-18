@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { PlanOperation } from "@cloudpilot/domain";
 
-import { createCloudflareOperationExecutor } from "../src/operation-executor";
+import {
+  createCloudflareExecutionCapability,
+  createCloudflareOperationExecutor,
+} from "../src/operation-executor";
 
 function createProvider() {
   return {
@@ -143,5 +146,65 @@ describe("CloudflareOperationExecutor", () => {
 
     expect(provider.deployWorker).not.toHaveBeenCalled();
     expect(provider.deleteWorker).not.toHaveBeenCalled();
+  });
+});
+
+describe("CloudflareExecutionCapability", () => {
+  const capability = createCloudflareExecutionCapability();
+
+  it.each(["create", "update", "delete"] as const)(
+    "supports Worker %s operations",
+    (action) => {
+      expect(capability(workerOperation(action))).toEqual({
+        supported: true,
+      });
+    },
+  );
+
+  it("rejects Zone operations", () => {
+    const operation: PlanOperation = {
+      action: "create",
+      resource: {
+        type: "zone",
+        id: "example.com",
+      },
+      desired: {
+        resource: {
+          type: "zone",
+          id: "example.com",
+        },
+        attributes: {},
+      },
+      dependencies: [],
+    };
+
+    expect(capability(operation)).toEqual({
+      supported: false,
+      reason: "Zone operations are not supported by the Cloudflare executor.",
+    });
+  });
+
+  it("rejects DNS record operations", () => {
+    const operation: PlanOperation = {
+      action: "create",
+      resource: {
+        type: "dns_record",
+        id: "record-1",
+      },
+      desired: {
+        resource: {
+          type: "dns_record",
+          id: "record-1",
+        },
+        attributes: {},
+      },
+      dependencies: [],
+    };
+
+    expect(capability(operation)).toEqual({
+      supported: false,
+      reason:
+        "DNS record operations are not supported by the Cloudflare executor.",
+    });
   });
 });

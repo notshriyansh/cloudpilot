@@ -1,5 +1,9 @@
 import { ExecutionRecord, PlanEvaluator } from "@cloudpilot/domain";
-import { ExecutionStore } from "@cloudpilot/state-store";
+import {
+  ExecutionStore,
+  ReconciliationRunRecord,
+  ReconciliationRunStore,
+} from "@cloudpilot/state-store";
 import { vi } from "vitest";
 import { EvaluationService } from "../../src/evaluation";
 import { App } from "../../src/app";
@@ -18,6 +22,37 @@ export function createFakeExecutionStore(): ExecutionStore {
 
     async getLatestExecution() {
       return [...executions.values()].at(-1);
+    },
+  };
+}
+
+export function createFakeReconciliationRunStore(): ReconciliationRunStore {
+  const runs = new Map<string, ReconciliationRunRecord>();
+
+  return {
+    async saveRun(run) {
+      runs.set(run.id, run);
+    },
+
+    async getRun(id) {
+      return runs.get(id);
+    },
+
+    async getLatestRun() {
+      return [...runs.values()].at(-1);
+    },
+
+    async startRun(run) {
+      const existingRun = [...runs.values()].find(
+        (candidate) => candidate.status === "running",
+      );
+
+      if (existingRun) {
+        return false;
+      }
+
+      runs.set(run.id, run);
+      return true;
     },
   };
 }
@@ -102,6 +137,8 @@ export function createApp(overrides: Partial<App> = {}): App {
       saveDesiredState: vi.fn(),
       getDesiredState: vi.fn(),
     },
+
+    reconciliationRunStore: createFakeReconciliationRunStore(),
 
     ...overrides,
   };
