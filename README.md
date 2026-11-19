@@ -278,6 +278,10 @@ CloudPilot is an engineering prototype, not a production-ready infrastructure ma
 - **Access control:** The dashboard proxy currently has no browser-user authentication. Keep the dashboard private; it is not safe to expose publicly as a multi-user application.
 - **Scale and tenancy:** The current application uses a shared desired-state and management-scope model rather than a complete multi-tenant authorization system.
 
+### Further reading
+
+- [Execution Lifecycle](docs/execution-lifecycle.md) — How CloudPilot plans, evaluates, executes, persists, and verifies infrastructure changes, including reconciliation and failure boundaries.
+
 ## Project status
 
 The control-plane workflow, Cloudflare provider integration, persistence layer, and dashboard have been implemented and tested.
