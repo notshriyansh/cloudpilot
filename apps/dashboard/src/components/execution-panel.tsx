@@ -214,6 +214,11 @@ function ExecutionDetails({ execution }: { execution: ExecutionRecord }) {
             Verification
           </p>
         </div>
+        <p className="mb-3 text-xs leading-5 text-slate-500">
+          Verification compares observed resource configuration with the desired
+          state and checks deployed Worker script content. It does not test
+          Worker runtime health or validate routes, bindings, or triggers.
+        </p>
 
         {!verification ? (
           <p className="text-sm text-slate-500">

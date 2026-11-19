@@ -1,4 +1,4 @@
-import { PlanOperation } from "@cloudpilot/domain";
+import type { EvaluatedOperation, EvaluatedPlan } from "@cloudpilot/domain";
 
 export type ResourceState = {
   resource: {
@@ -13,17 +13,7 @@ export type DesiredState = {
   resources: ResourceState[];
 };
 
-export type EvaluatedOperation = {
-  operation: PlanOperation;
-  policy: Record<string, unknown>;
-  risk: Record<string, unknown>;
-  approval: Record<string, unknown>;
-  readiness: "ready" | "blocked" | "approval_required";
-};
-
-export type EvaluatedPlan = {
-  operations: EvaluatedOperation[];
-};
+export type { EvaluatedOperation, EvaluatedPlan };
 
 export const emptyDesiredState: DesiredState = {
   resources: [],

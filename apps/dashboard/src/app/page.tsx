@@ -29,6 +29,7 @@ import {
   type InventoryResource,
   type InventoryResourceType,
 } from "@/lib/resource-inventory";
+import { buildPolicySummary } from "@/lib/policy-summary";
 
 type Resource = InventoryResource;
 
@@ -52,9 +53,14 @@ const navigation = [
 
 export default function DashboardPage() {
   const [observation, setObservation] = useState<Observation | null>(null);
+  const [initializing, setInitializing] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorSource, setErrorSource] = useState<"saved-state" | "inspection">(
+    "inspection",
+  );
   const [evaluation, setEvaluation] = useState<EvaluatedPlan | null>(null);
+  const policySummary = buildPolicySummary(evaluation);
   const [searchQuery, setSearchQuery] = useState("");
   const [resourceType, setResourceType] = useState<
     InventoryResourceType | "all"
@@ -62,6 +68,7 @@ export default function DashboardPage() {
   const [selectedResourceKey, setSelectedResourceKey] = useState<string | null>(
     null,
   );
+  const [activeSection, setActiveSection] = useState("overview");
 
   useEffect(() => {
     let cancelled = false;
@@ -92,11 +99,16 @@ export default function DashboardPage() {
         }
       } catch (err) {
         if (!cancelled) {
+          setErrorSource("saved-state");
           setError(
             err instanceof Error
               ? err.message
               : "Unable to load saved infrastructure state.",
           );
+        }
+      } finally {
+        if (!cancelled) {
+          setInitializing(false);
         }
       }
     }
@@ -109,8 +121,11 @@ export default function DashboardPage() {
   }, []);
 
   async function inspectInfrastructure() {
+    if (loading || initializing) return;
+
     setLoading(true);
     setError(null);
+    setErrorSource("inspection");
 
     try {
       const response = await fetch("/api/inspect", {
@@ -216,13 +231,14 @@ export default function DashboardPage() {
               key={id}
               type="button"
               onClick={() => {
+                setActiveSection(id);
                 document.getElementById(id)?.scrollIntoView({
                   behavior: "smooth",
                   block: "start",
                 });
               }}
               className={`mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition ${
-                index === 0
+                activeSection === id
                   ? "bg-white/[0.07] text-white"
                   : "text-slate-400 hover:bg-white/4 hover:text-white"
               }`}
@@ -241,10 +257,11 @@ export default function DashboardPage() {
         <div className="mt-auto border-t border-white/[0.07] p-5">
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <span className="size-2 rounded-full bg-emerald-400" />
-            Dashboard available
+            Dashboard interface loaded
           </div>
           <p className="mt-2 text-[11px] leading-5 text-slate-600">
-            Control-plane connectivity is checked when you run an inspection.
+            Control-plane connectivity is checked when you inspect
+            infrastructure.
           </p>
         </div>
       </aside>
@@ -261,10 +278,20 @@ export default function DashboardPage() {
             <span className="hidden items-center gap-2 rounded-full border border-white/8 px-3 py-1.5 text-xs text-slate-400 sm:flex">
               <span
                 className={`size-1.5 rounded-full ${
-                  observation ? "bg-emerald-400" : "bg-slate-500"
+                  initializing || loading
+                    ? "bg-amber-400"
+                    : observation
+                      ? "bg-emerald-400"
+                      : "bg-slate-500"
                 }`}
               />
-              {observation ? "Inspection completed" : "Awaiting inspection"}
+              {initializing
+                ? "Loading saved state"
+                : loading
+                  ? "Inspection in progress"
+                  : observation
+                    ? "Saved observation available"
+                    : "Awaiting inspection"}
             </span>
             <div className="flex size-9 items-center justify-center rounded-full border border-white/10 bg-white/4 text-xs font-medium">
               CP
@@ -289,7 +316,7 @@ export default function DashboardPage() {
             <button
               type="button"
               onClick={inspectInfrastructure}
-              disabled={loading}
+              disabled={loading || initializing}
               className="inline-flex h-11 items-center justify-center gap-2 self-start rounded-lg bg-indigo-500 px-4 text-sm font-medium text-white transition hover:bg-indigo-400 disabled:cursor-wait disabled:opacity-60 sm:self-auto"
             >
               {loading ? (
@@ -297,7 +324,11 @@ export default function DashboardPage() {
               ) : (
                 <RefreshCw size={16} />
               )}
-              {loading ? "Inspecting..." : "Inspect infrastructure"}
+              {initializing
+                ? "Loading saved state..."
+                : loading
+                  ? "Inspecting..."
+                  : "Inspect infrastructure"}
             </button>
           </div>
 
@@ -309,7 +340,9 @@ export default function DashboardPage() {
               <CircleAlert className="mt-0.5 shrink-0 text-red-400" size={18} />
               <div>
                 <p className="text-sm font-medium text-red-300">
-                  Inspection unsuccessful
+                  {errorSource === "saved-state"
+                    ? "Unable to load saved observation"
+                    : "Inspection unsuccessful"}
                 </p>
                 <p className="mt-1 text-sm text-slate-400">{error}</p>
               </div>
@@ -333,7 +366,7 @@ export default function DashboardPage() {
                   {observation ? (
                     <>
                       <CheckCircle2 size={13} className="text-emerald-400" />
-                      Live observation
+                      Latest saved observation
                     </>
                   ) : (
                     "Run an inspection to populate"
@@ -403,7 +436,17 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {!observation && !loading ? (
+            {initializing && !observation ? (
+              <div className="flex min-h-64 items-center justify-center gap-3 text-sm text-slate-400">
+                <LoaderCircle size={18} className="animate-spin" />
+                Loading the latest saved observation...
+              </div>
+            ) : !observation && loading ? (
+              <div className="flex min-h-64 items-center justify-center gap-3 text-sm text-slate-400">
+                <LoaderCircle size={18} className="animate-spin" />
+                Querying the control plane...
+              </div>
+            ) : !observation ? (
               <div className="flex min-h-64 flex-col items-center justify-center px-6 text-center">
                 <div className="flex size-12 items-center justify-center rounded-xl border border-white/8 bg-white/3">
                   <Cloud size={22} className="text-slate-400" />
@@ -415,11 +458,6 @@ export default function DashboardPage() {
                   Inspect your infrastructure to retrieve actual resources from
                   your configured Cloudflare account.
                 </p>
-              </div>
-            ) : loading ? (
-              <div className="flex min-h-64 items-center justify-center gap-3 text-sm text-slate-400">
-                <LoaderCircle size={18} className="animate-spin" />
-                Querying the control plane...
               </div>
             ) : filteredResources.length === 0 ? (
               <div className="p-10 text-center">
@@ -580,11 +618,146 @@ export default function DashboardPage() {
               <ShieldCheck size={17} className="text-indigo-400" />
               Policy and approval controls
             </div>
+
             <p className="mt-2 text-sm leading-6 text-slate-500">
-              Infrastructure changes remain subject to the existing
-              control-plane policy evaluation and approval requirements. This
-              dashboard does not bypass either check.
+              Summary of the latest desired-state evaluation. Policy decisions,
+              approval requirements, risk assessments, and provider execution
+              support are evaluated independently.
             </p>
+
+            {!policySummary ? (
+              <div className="mt-5 rounded-lg border border-dashed border-white/10 p-5">
+                <p className="text-sm font-medium text-slate-300">
+                  No evaluation available
+                </p>
+                <p className="mt-1 text-sm leading-5 text-slate-500">
+                  Save and evaluate a desired state to see policy decisions,
+                  risk levels, approval requirements, and execution readiness.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                    Evaluation summary
+                  </p>
+                  <span className="rounded-full border border-white/10 px-2.5 py-1 text-xs text-slate-400">
+                    {policySummary.total} operations
+                  </span>
+                </div>
+
+                <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="rounded-lg border border-white/[0.07] bg-black/15 p-4">
+                    <p className="text-xs text-slate-500">Policy decisions</p>
+                    <p className="mt-3 text-2xl font-semibold tabular-nums text-slate-100">
+                      {policySummary.policy.allowed}
+                      <span className="mx-1 text-sm font-normal text-slate-600">
+                        /
+                      </span>
+                      {policySummary.policy.denied}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Allowed / denied
+                    </p>
+                  </div>
+
+                  <div className="rounded-lg border border-white/[0.07] bg-black/15 p-4">
+                    <p className="text-xs text-slate-500">Approval required</p>
+                    <p className="mt-3 text-2xl font-semibold tabular-nums text-slate-100">
+                      {policySummary.approval.required}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {policySummary.approval.notRequired} not required
+                    </p>
+                  </div>
+
+                  <div className="rounded-lg border border-white/[0.07] bg-black/15 p-4">
+                    <p className="text-xs text-slate-500">
+                      Execution readiness
+                    </p>
+                    <p className="mt-3 text-2xl font-semibold tabular-nums text-slate-100">
+                      {policySummary.readiness.ready}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Ready operations
+                    </p>
+                  </div>
+
+                  <div className="rounded-lg border border-white/[0.07] bg-black/15 p-4">
+                    <p className="text-xs text-slate-500">
+                      Unsupported operations
+                    </p>
+                    <p className="mt-3 text-2xl font-semibold tabular-nums text-slate-100">
+                      {policySummary.execution.unsupported}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Not supported by the executor
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-lg border border-white/[0.07] p-4">
+                    <p className="text-sm font-medium text-slate-300">
+                      Risk distribution
+                    </p>
+                    <div className="mt-4 grid grid-cols-2 gap-3">
+                      {(
+                        [
+                          ["Low", policySummary.risk.low],
+                          ["Medium", policySummary.risk.medium],
+                          ["High", policySummary.risk.high],
+                          ["Critical", policySummary.risk.critical],
+                        ] as const
+                      ).map(([label, count]) => (
+                        <div key={label}>
+                          <p className="text-xs text-slate-500">{label}</p>
+                          <p className="mt-1 text-lg font-semibold tabular-nums text-slate-200">
+                            {count}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border border-white/[0.07] p-4">
+                    <p className="text-sm font-medium text-slate-300">
+                      Readiness breakdown
+                    </p>
+                    <div className="mt-4 space-y-3">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-400">Ready</span>
+                        <span className="tabular-nums text-slate-200">
+                          {policySummary.readiness.ready}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-400">Blocked</span>
+                        <span className="tabular-nums text-slate-200">
+                          {policySummary.readiness.blocked}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-400">
+                          Approval required
+                        </span>
+                        <span className="tabular-nums text-slate-200">
+                          {policySummary.readiness.approvalRequired}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <p className="mt-4 text-xs leading-5 text-slate-500">
+                  A blocked operation may be denied by policy or unsupported by
+                  the executor. Unsupported counts can overlap with blocked
+                  counts. Approval-required operations are not yet ready for
+                  execution. This summary is a preview and does not execute
+                  infrastructure changes.
+                </p>
+              </>
+            )}
           </section>
 
           {observation && (
